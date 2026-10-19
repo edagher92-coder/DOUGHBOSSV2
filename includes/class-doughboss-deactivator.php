@@ -31,6 +31,8 @@ class DoughBoss_Deactivator {
 		// the deactivation request.
 		wp_clear_scheduled_hook( 'doughboss_pospal_outbox_dispatch' );
 		wp_clear_scheduled_hook( 'doughboss_pospal_outbox_reconcile' );
+		wp_clear_scheduled_hook( 'doughboss_square_hosted_sweep' );
+		wp_clear_scheduled_hook( 'doughboss_square_oauth_refresh' );
 		flush_rewrite_rules();
 	}
 }

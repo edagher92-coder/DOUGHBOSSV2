@@ -103,6 +103,13 @@ class DoughBoss_Voucher {
 	 * @return array|WP_Error array{ id:int, code:string } or error.
 	 */
 	public static function issue( array $args ) {
+		// This is the durable creation boundary for every issuer (admin, REST,
+		// CLI, campaigns and loyalty). Keep the check before every database or
+		// provider-visible side effect so paused issuance cannot be bypassed.
+		if ( ! DoughBoss_Settings::legacy_voucher_issuance_enabled() ) {
+			return self::issuance_paused_error();
+		}
+
 		global $wpdb;
 		$table = self::table();
 
@@ -171,6 +178,20 @@ class DoughBoss_Voucher {
 		return array(
 			'id'   => (int) $wpdb->insert_id,
 			'code' => $code,
+		);
+	}
+
+	/**
+	 * A consistent, fail-closed response for attempts to create new legacy
+	 * promotional vouchers while the owner-controlled program is paused.
+	 *
+	 * @return WP_Error
+	 */
+	private static function issuance_paused_error() {
+		return new WP_Error(
+			'doughboss_voucher_issuance_paused',
+			__( 'New promotional voucher issuance is currently paused.', 'doughboss' ),
+			array( 'status' => 503 )
 		);
 	}
 
@@ -1191,6 +1212,12 @@ class DoughBoss_Voucher {
 	 * @return array|WP_Error array{ id, code } or error.
 	 */
 	public static function claim( $slug, array $args = array() ) {
+		// Reject campaign claims before loading campaign configuration or taking a
+		// pool lock. issue() repeats this check at the durable write boundary.
+		if ( ! DoughBoss_Settings::legacy_voucher_issuance_enabled() ) {
+			return self::issuance_paused_error();
+		}
+
 		global $wpdb;
 		$slug      = sanitize_key( $slug );
 		$campaigns = self::campaigns();

@@ -125,9 +125,9 @@ class DoughBoss_Locations {
 			$timezone = 'Australia/Sydney';
 		}
 		$capacity_mode = isset( $data['capacity_mode'] ) ? sanitize_key( $data['capacity_mode'] ) : 'off';
-		// Customer enforcement is intentionally not exposed until checkout hold
-		// conversion and the real MariaDB race suite are both green.
-		if ( ! in_array( $capacity_mode, array( 'off', 'shadow' ), true ) ) {
+		// 'live' (2.51) lets customers choose an ASAP/scheduled pickup time with
+		// transactional per-slot order limits. 'off' is the legacy checkout.
+		if ( ! in_array( $capacity_mode, array( 'off', 'shadow', 'live' ), true ) ) {
 			$capacity_mode = 'off';
 		}
 
@@ -145,8 +145,12 @@ class DoughBoss_Locations {
 			'minimum_notice_minutes' => isset( $data['minimum_notice_minutes'] ) ? max( 0, min( 1440, (int) $data['minimum_notice_minutes'] ) ) : 30,
 			'booking_horizon_days' => isset( $data['booking_horizon_days'] ) ? max( 1, min( 31, (int) $data['booking_horizon_days'] ) ) : 7,
 			'hold_minutes'      => isset( $data['hold_minutes'] ) ? max( 1, min( 30, (int) $data['hold_minutes'] ) ) : 10,
-			'slot_order_capacity' => isset( $data['slot_order_capacity'] ) ? max( 1, min( 10000, (int) $data['slot_order_capacity'] ) ) : 4,
+			'slot_order_capacity' => isset( $data['slot_order_capacity'] ) ? max( 1, min( 10000, (int) $data['slot_order_capacity'] ) ) : 6,
 			'slot_unit_capacity' => isset( $data['slot_unit_capacity'] ) ? max( 1, min( 10000, (int) $data['slot_unit_capacity'] ) ) : 12,
+			'pickup_days_ahead'  => isset( $data['pickup_days_ahead'] ) ? max( 0, min( 7, (int) $data['pickup_days_ahead'] ) ) : 1,
+			'cutoff_minutes'     => isset( $data['cutoff_minutes'] ) ? max( 0, min( 180, (int) $data['cutoff_minutes'] ) ) : 20,
+			'busy_extra_minutes' => isset( $data['busy_extra_minutes'] ) ? max( 0, min( 120, (int) $data['busy_extra_minutes'] ) ) : 0,
+			'ordering_paused'    => empty( $data['ordering_paused'] ) ? 0 : 1,
 			'tyro_location_id'   => isset( $data['tyro_location_id'] ) ? substr( sanitize_text_field( $data['tyro_location_id'] ), 0, 191 ) : '',
 			'pospal_store_index'  => isset( $data['pospal_store_index'] ) ? max( 0, min( 3, (int) $data['pospal_store_index'] ) ) : 0,
 			'online_payment_enabled' => empty( $data['online_payment_enabled'] ) ? 0 : 1,
@@ -198,7 +202,7 @@ class DoughBoss_Locations {
 		$ok = $wpdb->insert(
 			self::table(),
 			$row,
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d' )
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d' )
 		);
 		return $ok ? (int) $wpdb->insert_id : 0;
 	}
@@ -225,7 +229,7 @@ class DoughBoss_Locations {
 			self::table(),
 			$row,
 			array( 'id' => $id ),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d' ),
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%d', '%d' ),
 			array( '%d' )
 		);
 		if ( false !== $updated ) {
@@ -368,6 +372,206 @@ class DoughBoss_Locations {
 		);
 	}
 
+	/**
+	 * Build the live (customer-enforced) pickup capacity configuration.
+	 *
+	 * Same shape DoughBoss_Capacity::windows() consumes. Demand in live mode is
+	 * always one order, so capacity_units is the per-slot order limit. Hours come
+	 * from stored weekly hours; when a shop has none stored the published hours
+	 * for its slug are used. Nothing is invented: a shop with neither yields a
+	 * config with empty hours (and therefore no windows).
+	 *
+	 * @param int $location_id Location id.
+	 * @return array|null Null unless the shop is live, active and pickup-enabled.
+	 */
+	public static function capacity_live_config( $location_id ) {
+		global $wpdb;
+		$loc = self::get( $location_id );
+		if ( ! $loc || ! isset( $loc->capacity_mode ) || 'live' !== (string) $loc->capacity_mode || empty( $loc->is_active ) || empty( $loc->pickup_enabled ) ) {
+			return null;
+		}
+		try {
+			$local_today = new DateTimeImmutable( 'today', new DateTimeZone( (string) $loc->timezone ) );
+		} catch ( Exception $e ) {
+			return null;
+		}
+
+		$days_ahead = isset( $loc->pickup_days_ahead ) ? max( 0, min( 7, (int) $loc->pickup_days_ahead ) ) : 1;
+		$cutoff     = isset( $loc->cutoff_minutes ) ? max( 0, min( 180, (int) $loc->cutoff_minutes ) ) : 20;
+		$busy_extra = isset( $loc->busy_extra_minutes ) ? max( 0, min( 120, (int) $loc->busy_extra_minutes ) ) : 0;
+		$horizon    = $days_ahead + 1;
+		$prep       = max( 0, (int) $loc->prep_time_default );
+
+		$hours_raw    = self::weekly_hours( $location_id );
+		$hours        = array();
+		$has_stored   = false;
+		foreach ( array( 'sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat' ) as $day ) {
+			$hours[ $day ] = array();
+			if ( empty( $hours_raw[ $day ] ) ) { continue; }
+			foreach ( explode( ',', $hours_raw[ $day ] ) as $range ) {
+				if ( preg_match( '/^(\d{2}:\d{2})-(\d{2}:\d{2})$/', trim( $range ), $match ) ) {
+					$hours[ $day ][] = array( $match[1], $match[2] );
+					$has_stored = true;
+				}
+			}
+		}
+		$hours_source = $has_stored ? 'stored' : 'none';
+		if ( ! $has_stored && class_exists( 'DoughBoss_Store_Hours' ) ) {
+			// Published hours (already shown on the storefront cards). Never invented.
+			$schedule     = DoughBoss_Store_Hours::schedule_for( isset( $loc->slug ) ? (string) $loc->slug : '', null );
+			$hours_source = $schedule['source'];
+			$by_key       = array( 1 => 'mon', 2 => 'tue', 3 => 'wed', 4 => 'thu', 5 => 'fri', 6 => 'sat', 7 => 'sun' );
+			foreach ( $schedule['week'] as $iso => $ranges ) {
+				if ( isset( $by_key[ (int) $iso ] ) ) {
+					$hours[ $by_key[ (int) $iso ] ] = array_values( $ranges );
+				}
+			}
+		}
+
+		$exceptions = $wpdb->prefix . 'doughboss_schedule_exceptions';
+		$today      = $local_today->format( 'Y-m-d' );
+		$through    = $local_today->modify( '+' . $horizon . ' days' )->format( 'Y-m-d' );
+		// Every dated exception in the horizon blocks that date (holiday closures
+		// included): dated hours/capacity overrides are not interpreted as live.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$blackouts = (array) $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT service_date FROM {$exceptions} WHERE location_id = %d AND order_type = 'pickup' AND service_date BETWEEN %s AND %s", absint( $location_id ), $today, $through ) );
+
+		return array(
+			'location_id'      => (int) $loc->id,
+			'planning_version' => (int) $loc->planning_version,
+			'enabled'          => true,
+			'active'           => true,
+			'pickup_enabled'   => true,
+			'timezone'         => (string) $loc->timezone,
+			'slot_minutes'     => (int) $loc->slot_minutes,
+			'notice_minutes'   => min( 1440, $prep + $busy_extra ),
+			'horizon_days'     => $horizon,
+			'capacity_units'   => (int) $loc->slot_order_capacity,
+			'cutoff_minutes'   => $cutoff,
+			'blackout_dates'   => array_values( $blackouts ),
+			'hours'            => $hours,
+			'hours_source'     => $hours_source,
+			'prep_minutes'     => $prep,
+			'hold_minutes'     => max( 1, min( 30, (int) $loc->hold_minutes ) ),
+		);
+	}
+
+	/**
+	 * Upcoming holiday closures (pickup, whole day) as Y-m-d dates.
+	 *
+	 * @param int         $location_id Location id.
+	 * @param string|null $from        First date to include (Y-m-d); defaults to the shop's today.
+	 * @return string[]
+	 */
+	public static function holiday_closures( $location_id, $from = null ) {
+		global $wpdb;
+		if ( is_string( $from ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $from ) ) {
+			$today = $from;
+		} else {
+			$loc  = self::get( $location_id );
+			$zone = $loc && ! empty( $loc->timezone ) ? (string) $loc->timezone : 'Australia/Sydney';
+			try {
+				$today = ( new DateTimeImmutable( 'today', new DateTimeZone( $zone ) ) )->format( 'Y-m-d' );
+			} catch ( Exception $e ) {
+				$today = gmdate( 'Y-m-d' );
+			}
+		}
+		$table = $wpdb->prefix . 'doughboss_schedule_exceptions';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = (array) $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT service_date FROM {$table} WHERE location_id = %d AND order_type = 'pickup' AND is_closed = 1 AND service_date >= %s ORDER BY service_date ASC", absint( $location_id ), $today ) );
+		$out = array();
+		foreach ( $rows as $date ) {
+			if ( is_string( $date ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
+				$out[] = $date;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Replace a shop's whole-day holiday closures.
+	 *
+	 * Rows reuse doughboss_schedule_exceptions (is_closed = 1, pickup, segment 1),
+	 * which pickup_status() and the capacity configs already treat as blackouts.
+	 *
+	 * @param int      $location_id Location id.
+	 * @param string[] $dates       Y-m-d dates.
+	 * @return true|WP_Error
+	 */
+	public static function save_holiday_closures( $location_id, array $dates ) {
+		global $wpdb;
+		$location_id = absint( $location_id );
+		$clean       = array();
+		foreach ( $dates as $date ) {
+			$date = trim( (string) $date );
+			if ( '' === $date ) { continue; }
+			if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $date, $match ) || ! checkdate( (int) $match[2], (int) $match[3], (int) $match[1] ) ) {
+				return new WP_Error( 'doughboss_holiday_invalid', sprintf( __( 'Invalid holiday date "%s". Use YYYY-MM-DD.', 'doughboss' ), sanitize_text_field( $date ) ) );
+			}
+			$clean[ $date ] = true;
+		}
+		$clean = array_keys( $clean );
+		sort( $clean, SORT_STRING );
+		if ( ! $location_id || count( $clean ) > 120 ) {
+			return new WP_Error( 'doughboss_holiday_invalid', __( 'Too many holiday dates (maximum 120).', 'doughboss' ) );
+		}
+
+		$table = $wpdb->prefix . 'doughboss_schedule_exceptions';
+		$wpdb->query( 'START TRANSACTION' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( false === $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE location_id = %d AND order_type = 'pickup' AND segment = 1 AND is_closed = 1", $location_id ) ) ) {
+			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			return new WP_Error( 'doughboss_holiday_storage', __( 'Holiday closures could not be saved.', 'doughboss' ) );
+		}
+		foreach ( $clean as $date ) {
+			// An existing dated override on the same date is converted to a closure.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$ok = $wpdb->query( $wpdb->prepare( "INSERT INTO {$table} (location_id, order_type, service_date, segment, is_closed, note) VALUES (%d, 'pickup', %s, 1, 1, %s) ON DUPLICATE KEY UPDATE is_closed = 1", $location_id, $date, 'Holiday closure' ) );
+			if ( false === $ok ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				return new WP_Error( 'doughboss_holiday_storage', __( 'Holiday closures could not be saved.', 'doughboss' ) );
+			}
+		}
+		$wpdb->query( 'COMMIT' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		return true;
+	}
+
+	/**
+	 * Today's trading hours for the shop picker, in the shop's own timezone.
+	 *
+	 * @param object                 $loc     Location row.
+	 * @param DateTimeImmutable|null $now_utc Injected clock.
+	 * @return array{text:string,source:string}
+	 */
+	private static function today_hours_view( $loc, $now_utc = null ) {
+		$none = array( 'text' => '', 'source' => 'none' );
+		if ( ! class_exists( 'DoughBoss_Store_Hours' ) || empty( $loc->id ) ) {
+			return $none;
+		}
+		try {
+			$zone  = new DateTimeZone( isset( $loc->timezone ) && '' !== (string) $loc->timezone ? (string) $loc->timezone : 'Australia/Sydney' );
+			$local = ( $now_utc instanceof DateTimeImmutable ? $now_utc : new DateTimeImmutable( 'now', new DateTimeZone( 'UTC' ) ) )->setTimezone( $zone );
+			$schedule = DoughBoss_Store_Hours::schedule_for( isset( $loc->slug ) ? (string) $loc->slug : '', self::weekly_hours( (int) $loc->id ) );
+			if ( 'none' === $schedule['source'] ) {
+				return $none;
+			}
+			$ranges = isset( $schedule['week'][ (int) $local->format( 'N' ) ] ) ? $schedule['week'][ (int) $local->format( 'N' ) ] : array();
+			if ( $ranges && in_array( $local->format( 'Y-m-d' ), self::holiday_closures( (int) $loc->id, $local->format( 'Y-m-d' ) ), true ) ) {
+				$ranges = array();
+			}
+			if ( ! $ranges ) {
+				return array( 'text' => __( 'Closed today', 'doughboss' ), 'source' => $schedule['source'] );
+			}
+			$parts = array();
+			foreach ( $ranges as $range ) {
+				$parts[] = DoughBoss_Store_Hours::format_clock( $range[0] ) . '–' . DoughBoss_Store_Hours::format_clock( $range[1] );
+			}
+			return array( 'text' => implode( ', ', $parts ), 'source' => $schedule['source'] );
+		} catch ( Throwable $e ) {
+			return $none;
+		}
+	}
+
 	/** @return bool */
 	private static function valid_clock( $time ) {
 		return (bool) preg_match( '/^(?:[01]\d|2[0-3]):[0-5]\d$/', (string) $time );
@@ -423,11 +627,14 @@ class DoughBoss_Locations {
 	/**
 	 * Public-facing view of a location for the storefront/board.
 	 *
-	 * @param object $loc Location row.
+	 * @param object                 $loc     Location row.
+	 * @param DateTimeImmutable|null $now_utc Optional injected UTC clock (tests).
 	 * @return array
 	 */
-	public static function public_view( $loc ) {
-		$pickup_status = self::pickup_status( $loc );
+	public static function public_view( $loc, $now_utc = null ) {
+		$pickup_status = self::pickup_status( $loc, $now_utc );
+		$today_hours   = self::today_hours_view( $loc, $now_utc );
+		$capacity_mode = isset( $loc->capacity_mode ) ? (string) $loc->capacity_mode : 'off';
 		return array(
 			'id'               => (int) $loc->id,
 			'name'             => $loc->name,
@@ -443,6 +650,11 @@ class DoughBoss_Locations {
 			// payment availability or a guaranteed pickup time.
 			'pickup_status'    => $pickup_status,
 			'capacity_preview' => isset( $loc->capacity_mode ) && 'shadow' === $loc->capacity_mode,
+			'capacity_mode'    => $capacity_mode,
+			'pickup_live'      => 'live' === $capacity_mode && ! empty( $loc->pickup_enabled ) && ( ! isset( $loc->is_active ) || ! empty( $loc->is_active ) ),
+			'ordering_paused'  => ! empty( $loc->ordering_paused ),
+			'today_hours'      => $today_hours['text'],
+			'hours_source'     => $today_hours['source'],
 		);
 	}
 

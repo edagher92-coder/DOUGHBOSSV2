@@ -1,0 +1,452 @@
+{
+  "schema": 1,
+  "observedAtUtc": "2026-10-18T02:12:28.600Z",
+  "sourceCommit": "f779a136e7c73545321c11c37b1ea5fe77a4fbf7",
+  "origin": "http://127.0.0.1:8112",
+  "previewRoot": "C:/Codex/Output/doughboss-browser-current-20261018-r1",
+  "fixture": "8 synthetic menu items; provider/form/checkout submissions blocked",
+  "phone390": {
+    "cards": [
+      {
+        "height": 442.8999938964844,
+        "titleSize": "20px",
+        "width": 161.1999969482422
+      },
+      {
+        "height": 442.8999938964844,
+        "titleSize": "20px",
+        "width": 161.1999969482422
+      },
+      {
+        "height": 466.0999755859375,
+        "titleSize": "20px",
+        "width": 161.1999969482422
+      }
+    ],
+    "documentWidth": 376,
+    "grids": [
+      {
+        "columns": "161.2px 161.2px",
+        "contentVisibility": "auto",
+        "width": 334.3999938964844
+      },
+      {
+        "columns": "161.2px 161.2px",
+        "contentVisibility": "auto",
+        "width": 334.3999938964844
+      }
+    ],
+    "images": [
+      {
+        "alt": "Dough Boss Sujuk Deluxe pizza fresh from the oven",
+        "complete": true,
+        "currentSrc": "http://127.0.0.1:8112/public/images/responsive/sujuk-deluxe-480.avif",
+        "loading": "auto",
+        "naturalWidth": 421
+      },
+      {
+        "alt": "Zaatar & Cheese",
+        "complete": true,
+        "currentSrc": "http://127.0.0.1:8112/public/images/responsive/zaatar-cheese-480.avif",
+        "loading": "lazy",
+        "naturalWidth": 160
+      },
+      {
+        "alt": "Sujuk Deluxe",
+        "complete": true,
+        "currentSrc": "http://127.0.0.1:8112/public/images/responsive/sujuk-deluxe-480.avif",
+        "loading": "lazy",
+        "naturalWidth": 160
+      },
+      {
+        "alt": "Spinach Pie",
+        "complete": true,
+        "currentSrc": "http://127.0.0.1:8112/public/images/responsive/spinach-pie-480.avif",
+        "loading": "lazy",
+        "naturalWidth": 160
+      },
+      {
+        "alt": "Labneh Veggie Wrap",
+        "complete": false,
+        "currentSrc": "",
+        "loading": "lazy",
+        "naturalWidth": 0
+      },
+      {
+        "alt": "Choco Banana",
+        "complete": false,
+        "currentSrc": "",
+        "loading": "lazy",
+        "naturalWidth": 0
+      }
+    ],
+    "viewport": {
+      "height": 844,
+      "width": 390
+    }
+  },
+  "phone320": {
+    "cards": [
+      {
+        "height": 275.0099792480469,
+        "titleSize": "20px",
+        "width": 264
+      },
+      {
+        "height": 155.87998962402344,
+        "titleSize": "20px",
+        "width": 264
+      },
+      {
+        "height": 466.0899963378906,
+        "titleSize": "20px",
+        "width": 264
+      }
+    ],
+    "documentWidth": 305,
+    "grids": [
+      {
+        "columns": "264px",
+        "width": 264
+      },
+      {
+        "columns": "264px",
+        "width": 264
+      }
+    ],
+    "viewport": {
+      "height": 740,
+      "width": 320
+    }
+  },
+  "desktop1440": {
+    "documentWidth": 1425,
+    "grid": [
+      {
+        "columns": "248.76px 248.77px 248.77px 248.77px 248.77px",
+        "width": 1336
+      },
+      {
+        "columns": "248.76px 248.77px 248.77px 248.77px 248.77px",
+        "width": 1336
+      }
+    ],
+    "headingSizes": [
+      "27.528px",
+      "27.528px",
+      "27.528px"
+    ],
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  },
+  "search": {
+    "cards": [
+      "Sample juice"
+    ],
+    "status": [
+      "1 match"
+    ]
+  },
+  "afterCategoryAttempt": {
+    "dessert": [
+      {
+        "top": 2862.3798828125
+      }
+    ],
+    "images": [
+      {
+        "alt": "Dough Boss Sujuk Deluxe pizza fresh from the oven",
+        "complete": true,
+        "currentSrc": "http://127.0.0.1:8112/public/images/responsive/sujuk-deluxe-480.avif",
+        "naturalWidth": 421
+      },
+      {
+        "alt": "Zaatar & Cheese",
+        "complete": true,
+        "currentSrc": "http://127.0.0.1:8112/public/images/responsive/zaatar-cheese-480.avif",
+        "naturalWidth": 160
+      },
+      {
+        "alt": "Sujuk Deluxe",
+        "complete": true,
+        "currentSrc": "http://127.0.0.1:8112/public/images/responsive/sujuk-deluxe-480.avif",
+        "naturalWidth": 160
+      },
+      {
+        "alt": "Spinach Pie",
+        "complete": true,
+        "currentSrc": "http://127.0.0.1:8112/public/images/responsive/spinach-pie-480.avif",
+        "naturalWidth": 160
+      },
+      {
+        "alt": "Labneh Veggie Wrap",
+        "complete": false,
+        "currentSrc": "",
+        "naturalWidth": 0
+      },
+      {
+        "alt": "Choco Banana",
+        "complete": false,
+        "currentSrc": "",
+        "naturalWidth": 0
+      }
+    ],
+    "scrollY": 538.8800048828125
+  },
+  "heroFirst": {
+    "documentWidth": 1425,
+    "scripts": [
+      "./preview/db-opening-home-v6-tilt-04dd59f430796a29.js",
+      "./preview/db-opening-home-v6-controller-5ee915f035ca3139.js",
+      "./public/js/doughboss-preferences.js",
+      "./preview/menu-options.js",
+      "./preview/preview-api.js",
+      "./public/js/doughboss-shop-status.js",
+      "./public/js/doughboss.js",
+      "./public/js/doughboss-manoush-hero.js",
+      "./themes/doughboss-final/assets/theme.js",
+      "./themes/doughboss-final/assets/install.js",
+      "./preview/db-announcements-controller-e9969891b892acce.js",
+      "./preview/db-title-steam-controller-9b110ca3407d9f73.js"
+    ],
+    "video": [
+      {
+        "duration": 10.005,
+        "error": null,
+        "loop": true,
+        "muted": true,
+        "paused": false,
+        "readyState": 4,
+        "rect": {
+          "height": 853.3299560546875,
+          "width": 480
+        },
+        "src": "http://127.0.0.1:8112/preview/media/doughboss-commercial-v3-web-loop.mp4",
+        "time": 7.89674
+      }
+    ],
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  },
+  "heroSecond": {
+    "video": [
+      {
+        "duration": 10.005,
+        "error": null,
+        "loop": true,
+        "muted": true,
+        "paused": false,
+        "readyState": 4,
+        "time": 0.306105
+      }
+    ]
+  },
+  "homeTiming": {
+    "navigation": [
+      {
+        "dom": 260.8999999985099,
+        "load": 389.6000000014901
+      }
+    ],
+    "paint": [
+      {
+        "name": "first-paint",
+        "start": 124
+      },
+      {
+        "name": "first-contentful-paint",
+        "start": 124
+      }
+    ],
+    "resources": [
+      {
+        "name": "http://127.0.0.1:8112/public/css/doughboss-manoush-hero.css",
+        "type": "link",
+        "start": 17.399999998509884,
+        "duration": 20.600000001490116,
+        "bytes": 8786
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/css/doughboss.css",
+        "type": "link",
+        "start": 17.5,
+        "duration": 20.600000001490116,
+        "bytes": 76549
+      },
+      {
+        "name": "http://127.0.0.1:8112/preview/preview.css",
+        "type": "link",
+        "start": 17.600000001490116,
+        "duration": 20,
+        "bytes": 1146
+      },
+      {
+        "name": "http://127.0.0.1:8112/themes/doughboss-final/style.css",
+        "type": "link",
+        "start": 17.600000001490116,
+        "duration": 19.5,
+        "bytes": 40118
+      },
+      {
+        "name": "http://127.0.0.1:8112/preview/media/doughboss-commercial-v6-desktop-square-poster.jpg",
+        "type": "img",
+        "start": 24.799999997019768,
+        "duration": 12.600000001490116,
+        "bytes": 45257
+      },
+      {
+        "name": "http://127.0.0.1:8112/preview/db-opening-home-v6-tilt-04dd59f430796a29.js",
+        "type": "script",
+        "start": 24.899999998509884,
+        "duration": 12.899999998509884,
+        "bytes": 3038
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/fonts/barlow-400.woff2",
+        "type": "css",
+        "start": 43.899999998509884,
+        "duration": 47.20000000298023,
+        "bytes": 22496
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/fonts/bebasneue-400.woff2",
+        "type": "css",
+        "start": 45.899999998509884,
+        "duration": 45,
+        "bytes": 14068
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/fonts/barlow-700.woff2",
+        "type": "css",
+        "start": 50.5,
+        "duration": 40.899999998509884,
+        "bytes": 23088
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/fonts/barlow-600.woff2",
+        "type": "css",
+        "start": 50.5,
+        "duration": 44.19999999552965,
+        "bytes": 23072
+      },
+      {
+        "name": "http://127.0.0.1:8112/preview/db-opening-home-v6-controller-5ee915f035ca3139.js",
+        "type": "script",
+        "start": 84.10000000149012,
+        "duration": 10.299999997019768,
+        "bytes": 8399
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/css/doughboss-preferences.css",
+        "type": "link",
+        "start": 97.5,
+        "duration": 2.600000001490116,
+        "bytes": 2205
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/images/responsive/sujuk-deluxe-550.avif",
+        "type": "img",
+        "start": 181.5,
+        "duration": 4.299999997019768,
+        "bytes": 30944
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/js/doughboss-preferences.js",
+        "type": "script",
+        "start": 184.19999999552965,
+        "duration": 4.200000002980232,
+        "bytes": 10659
+      },
+      {
+        "name": "http://127.0.0.1:8112/preview/menu-options.js",
+        "type": "script",
+        "start": 190.29999999701977,
+        "duration": 3.899999998509884,
+        "bytes": 10065
+      },
+      {
+        "name": "http://127.0.0.1:8112/preview/preview-api.js",
+        "type": "script",
+        "start": 197,
+        "duration": 3.100000001490116,
+        "bytes": 8440
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/js/doughboss-shop-status.js",
+        "type": "script",
+        "start": 201.89999999850988,
+        "duration": 2.600000001490116,
+        "bytes": 12316
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/js/doughboss.js",
+        "type": "script",
+        "start": 205.89999999850988,
+        "duration": 3.7999999970197678,
+        "bytes": 210815
+      },
+      {
+        "name": "http://127.0.0.1:8112/public/js/doughboss-manoush-hero.js",
+        "type": "script",
+        "start": 213.79999999701977,
+        "duration": 3,
+        "bytes": 3594
+      },
+      {
+        "name": "http://127.0.0.1:8112/themes/doughboss-final/assets/theme.js",
+        "type": "script",
+        "start": 218.10000000149012,
+        "duration": 3,
+        "bytes": 12545
+      },
+      {
+        "name": "http://127.0.0.1:8112/themes/doughboss-final/assets/install.js",
+        "type": "script",
+        "start": 245.10000000149012,
+        "duration": 3.6999999955296516,
+        "bytes": 2672
+      },
+      {
+        "name": "http://127.0.0.1:8112/preview/db-announcements-controller-e9969891b892acce.js",
+        "type": "script",
+        "start": 249.89999999850988,
+        "duration": 2.5,
+        "bytes": 2819
+      },
+      {
+        "name": "http://127.0.0.1:8112/preview/db-title-steam-controller-9b110ca3407d9f73.js",
+        "type": "script",
+        "start": 253.79999999701977,
+        "duration": 2.7000000029802322,
+        "bytes": 1755
+      },
+      {
+        "name": "http://127.0.0.1:8112/preview/media/doughboss-commercial-v3-web-loop.mp4",
+        "type": "video",
+        "start": 266,
+        "duration": 68.60000000149012,
+        "bytes": 2720727
+      }
+    ]
+  },
+  "initialOrderTiming": {
+    "domContentLoadedMs": 251.20000000298023,
+    "loadMs": 290,
+    "firstContentfulPaintMs": 180,
+    "scope": "single loopback load before phone viewport override; not mobile/cold-network/LCP or live-site benchmark"
+  },
+  "limitations": [
+    "No physical phone or production network observation",
+    "Only 8 synthetic menu items, not the 43-item provider catalogue",
+    "Preview uses fallback navigation, not the saved WordPress primary menu",
+    "Preview hardcodes storefront script on homepage; cannot prove production enqueue savings",
+    "Two bounded screenshot captures timed out; no visual screenshot or scroll FPS proof",
+    "Playwright search locators returned no matches; accessibility typeText filtered successfully",
+    "Category jump/deferred-image post-scroll acceptance not established",
+    "No provider/payment/staff/member/KDS or publication acceptance"
+  ]
+}

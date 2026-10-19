@@ -33,6 +33,12 @@ class DoughBoss_Shortcodes {
 		add_shortcode( 'doughboss_manoush_hero', array( $this, 'manoush_hero' ) );
 		add_shortcode( 'doughboss_ordering_status', array( $this, 'ordering_status' ) );
 		add_shortcode( 'doughboss_loyalty', array( $this, 'loyalty' ) );
+		add_shortcode( 'doughboss_square_membership', array( $this, 'square_membership' ) );
+	}
+
+	/** [doughboss_square_membership] — an optional Square-hosted customer link. */
+	public function square_membership() {
+		return DoughBoss_Square_Loyalty::membership_portal();
 	}
 
 	/** [doughboss_loyalty] — member account, points wallet and rewards. */
@@ -75,6 +81,8 @@ class DoughBoss_Shortcodes {
 				'description'   => __( 'Zaatar, cheese and meat manoush, plus spinach, haloumi, chicken and shanklish pies, oven-baked fresh to order.', 'doughboss' ),
 				'replay_label'  => __( 'Pause photo motion', 'doughboss' ),
 				'background_image' => DOUGHBOSS_PLUGIN_URL . 'public/images/doughboss-feast-real-v1.jpg',
+				// Describes the bundled feast photo; override together with background_image.
+				'image_alt'     => __( 'Dough Boss manoush and pies fresh from the oven', 'doughboss' ),
 				'primary_label' => __( 'Browse the menu', 'doughboss' ),
 				'primary_url'   => home_url( '/order/' ),
 				'secondary_label' => __( 'Plan catering', 'doughboss' ),
@@ -86,7 +94,7 @@ class DoughBoss_Shortcodes {
 		$variant = in_array( $atts['variant'], array( 'photo', 'home', 'catering' ), true ) ? $atts['variant'] : 'photo';
 
 		// The image element is directly discoverable and carries real dimensions.
-		$hero_image = $this->manoush_hero_image( $atts['background_image'] );
+		$hero_image = $this->manoush_hero_image( $atts['background_image'], $atts['image_alt'] );
 
 		ob_start();
 		?>
@@ -102,15 +110,19 @@ class DoughBoss_Shortcodes {
 				<div class="db-mh-actions">
 					<a class="db-mh-action db-mh-action--primary" href="<?php echo esc_url( $atts['primary_url'] ); ?>"><?php echo esc_html( $atts['primary_label'] ); ?></a>
 					<a class="db-mh-action db-mh-action--secondary" href="<?php echo esc_url( $atts['secondary_url'] ); ?>"><?php echo esc_html( $atts['secondary_label'] ); ?></a>
-					<button class="db-mh-replay" type="button" aria-pressed="false" data-db-manoush-replay data-db-pause-label="<?php esc_attr_e( 'Pause photo motion', 'doughboss' ); ?>" data-db-resume-label="<?php esc_attr_e( 'Resume photo motion', 'doughboss' ); ?>"><?php echo esc_html( $atts['replay_label'] ); ?></button>
 				</div>
-				<span class="db-mh-motion-note" role="status"><?php esc_html_e( 'The photograph moves gently as you scroll. Pause it at any time.', 'doughboss' ); ?></span>
 			</div>
-				<div class="db-mh-proof" aria-label="<?php esc_attr_e( 'Dough Boss at a glance', 'doughboss' ); ?>">
-					<span><strong><?php esc_html_e( 'Since 2009', 'doughboss' ); ?></strong><?php esc_html_e( 'In the industry', 'doughboss' ); ?></span>
-					<span><strong><?php esc_html_e( 'Three shops', 'doughboss' ); ?></strong><?php esc_html_e( 'Baking daily', 'doughboss' ); ?></span>
-					<span><strong><?php esc_html_e( 'Oven-baked', 'doughboss' ); ?></strong><?php esc_html_e( 'Fresh to order', 'doughboss' ); ?></span>
-				</div>
+			<ul class="db-mh-proof" aria-label="<?php esc_attr_e( 'Dough Boss at a glance', 'doughboss' ); ?>">
+				<li><strong class="db-mh-proof-value"><?php esc_html_e( 'Since 2009', 'doughboss' ); ?></strong> <span class="db-mh-proof-label"><?php esc_html_e( 'In the industry', 'doughboss' ); ?></span></li>
+				<li><strong class="db-mh-proof-value"><?php esc_html_e( 'Three shops', 'doughboss' ); ?></strong> <span class="db-mh-proof-label"><?php esc_html_e( 'Baking daily', 'doughboss' ); ?></span></li>
+				<li><strong class="db-mh-proof-value"><?php esc_html_e( 'Oven-baked', 'doughboss' ); ?></strong> <span class="db-mh-proof-label"><?php esc_html_e( 'Fresh to order', 'doughboss' ); ?></span></li>
+			</ul>
+			<?php // Corner icon toggle; hidden by CSS when the OS asks for reduced motion (the photo is then static). ?>
+			<button class="db-mh-replay db-mh-motion-toggle" type="button" aria-pressed="false" aria-label="<?php echo esc_attr( $atts['replay_label'] ); ?>" title="<?php echo esc_attr( $atts['replay_label'] ); ?>" data-db-manoush-replay data-db-pause-label="<?php esc_attr_e( 'Pause photo motion', 'doughboss' ); ?>" data-db-resume-label="<?php esc_attr_e( 'Resume photo motion', 'doughboss' ); ?>" data-db-reduced-label="<?php esc_attr_e( 'Photo motion off', 'doughboss' ); ?>">
+				<svg class="db-mh-motion-icon db-mh-motion-icon--pause" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
+				<svg class="db-mh-motion-icon db-mh-motion-icon--play" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>
+				<span class="db-mh-motion-label" data-db-motion-label><?php echo esc_html( $atts['replay_label'] ); ?></span>
+			</button>
 		</section>
 		<?php
 		return ob_get_clean();
@@ -123,12 +135,14 @@ class DoughBoss_Shortcodes {
 	 * default uses packaged, measured AVIF/WebP variants with the original fallback.
 	 *
 	 * @param string $image_url Hero image URL.
+	 * @param string $alt       Descriptive alternative text.
 	 * @return string
 	 */
-	private function manoush_hero_image( $image_url ) {
+	private function manoush_hero_image( $image_url, $alt = '' ) {
+		$alt        = trim( strip_tags( (string) $alt ) );
 		$attributes = array(
 			'class'         => 'db-mh-backdrop',
-			'alt'           => '',
+			'alt'           => $alt,
 			'loading'       => 'eager',
 			'decoding'      => 'async',
 			'fetchpriority' => 'high',
@@ -148,7 +162,7 @@ class DoughBoss_Shortcodes {
 			}
 		}
 
-		$html = '<img class="db-mh-backdrop" src="' . esc_url( $image_url ) . '" alt="" loading="eager" decoding="async" fetchpriority="high"';
+		$html = '<img class="db-mh-backdrop" src="' . esc_url( $image_url ) . '" alt="' . esc_attr( $alt ) . '" loading="eager" decoding="async" fetchpriority="high"';
 		if ( is_array( $dimensions ) ) {
 			$html .= ' width="' . $dimensions[0] . '" height="' . $dimensions[1] . '"';
 		}
@@ -168,7 +182,8 @@ class DoughBoss_Shortcodes {
 	 */
 	public function voucher_claim() {
 		$campaigns = array();
-		if ( class_exists( 'DoughBoss_Voucher' ) ) {
+		$issuance_enabled = class_exists( 'DoughBoss_Voucher' ) && DoughBoss_Settings::legacy_voucher_issuance_enabled();
+		if ( $issuance_enabled ) {
 			foreach ( DoughBoss_Voucher::campaigns() as $c ) {
 				if ( ! empty( $c['active'] ) ) {
 					$campaigns[] = $c;
@@ -179,11 +194,15 @@ class DoughBoss_Shortcodes {
 		?>
 		<div class="db-app db-voucher-claim" data-doughboss-voucher-claim>
 			<div class="db-vc-card">
-				<h3 class="db-vc-title"><?php esc_html_e( 'Claim your student voucher', 'doughboss' ); ?></h3>
-				<p class="db-vc-sub"><?php esc_html_e( 'Choose the student offer, then confirm your mobile and education email. Your email must end in .edu or .edu.au. We will email the code to that address and also show it here as a backup.', 'doughboss' ); ?></p>
-				<?php if ( empty( $campaigns ) ) : ?>
-					<p class="db-vc-none"><?php esc_html_e( 'No vouchers are available right now.', 'doughboss' ); ?></p>
+				<h3 class="db-vc-title"><?php echo $issuance_enabled ? esc_html__( 'Claim your student voucher', 'doughboss' ) : esc_html__( 'Voucher updates', 'doughboss' ); ?></h3>
+				<?php if ( ! $issuance_enabled ) : ?>
+					<p class="db-vc-none"><?php esc_html_e( 'Legacy promotional vouchers are currently paused.', 'doughboss' ); ?></p>
 				<?php else : ?>
+					<p class="db-vc-sub"><?php esc_html_e( 'Choose the student offer, then confirm your mobile and education email. Your email must end in .edu or .edu.au. We will email the code to that address and also show it here as a backup.', 'doughboss' ); ?></p>
+				<?php endif; ?>
+				<?php if ( $issuance_enabled && empty( $campaigns ) ) : ?>
+					<p class="db-vc-none"><?php esc_html_e( 'No vouchers are available right now.', 'doughboss' ); ?></p>
+				<?php elseif ( $issuance_enabled ) : ?>
 					<div class="db-vc-offers">
 						<?php foreach ( $campaigns as $c ) : ?>
 							<button type="button" class="db-vc-offer" data-campaign="<?php echo esc_attr( $c['slug'] ); ?>" aria-pressed="false">
@@ -233,15 +252,24 @@ class DoughBoss_Shortcodes {
 		$phone_tel     = is_string( $phone_digits ) && 0 === strpos( $phone_digits, '0' )
 			? '+61' . substr( $phone_digits, 1 )
 			: '+' . ltrim( (string) $phone_digits, '+' );
+		$notice_days   = DoughBoss_Catering::min_notice_business_days();
+		$notice_line   = $notice_days > 0
+			? sprintf(
+				/* translators: %d: minimum business days of notice. */
+				_n( 'Pickup from Revesby · minimum %d business day’s notice', 'Pickup from Revesby · minimum %d business days’ notice', $notice_days, 'doughboss' ),
+				$notice_days
+			)
+			: __( 'Pickup from Revesby', 'doughboss' );
 		$email_subject = rawurlencode( 'Dough Boss catering enquiry' );
 		$email_body    = rawurlencode( "Event date:\nGuest count:\nPreferred pickup time:\nDietary notes:\n" );
 		ob_start();
 		?>
-		<div class="db-app db-catering" data-doughboss-catering>
+		<div class="db-app db-catering" data-doughboss-catering data-notice-days="<?php echo esc_attr( (string) DoughBoss_Catering::min_notice_business_days() ); ?>" data-catering-locations="<?php echo esc_attr( (string) wp_json_encode( DoughBoss_Catering::catering_location_ids() ) ); ?>" data-catering-delivery="<?php echo DoughBoss_Catering::delivery_enabled() ? '1' : '0'; ?>">
 			<section class="dbc-contact" aria-labelledby="dbc-contact-title">
 				<p class="dbc-kicker"><?php esc_html_e( 'Catering enquiries', 'doughboss' ); ?></p>
 				<h2 class="dbc-h2" id="dbc-contact-title"><?php esc_html_e( 'Tell us what you need', 'doughboss' ); ?></h2>
 				<p class="dbc-sub"><?php esc_html_e( 'Share your date, preferred pickup time, guest count and dietary notes. Our catering team will confirm availability, the menu and final price before anything is locked in.', 'doughboss' ); ?></p>
+				<p class="dbc-sub dbc-terms"><strong><?php echo esc_html( $notice_line ); ?></strong></p>
 				<div class="dbc-contact-actions">
 					<a class="dbc-contact-card" href="<?php echo esc_attr( 'mailto:' . $email . '?subject=' . $email_subject . '&body=' . $email_body ); ?>">
 						<strong><?php esc_html_e( 'Email catering', 'doughboss' ); ?></strong>
@@ -266,7 +294,7 @@ class DoughBoss_Shortcodes {
 			<section class="dbc-faq" aria-labelledby="dbc-faq-title">
 				<p class="dbc-kicker"><?php esc_html_e( 'Catering Q&A', 'doughboss' ); ?></p>
 				<h2 class="dbc-h2" id="dbc-faq-title"><?php esc_html_e( 'Good to know before you order', 'doughboss' ); ?></h2>
-				<details><summary><?php esc_html_e( 'How much notice should I give?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'As early as you can. Lead time depends on the date, quantity and menu mix, and is confirmed before acceptance.', 'doughboss' ); ?></p></details>
+				<details><summary><?php esc_html_e( 'How much notice should I give?', 'doughboss' ); ?></summary><p><?php echo esc_html( $notice_days > 0 ? sprintf( /* translators: %d: minimum business days of notice. */ _n( 'At least %d business day’s notice (weekends don’t count), and earlier is better. Lead time depends on the date, quantity and menu mix, and is confirmed before acceptance.', 'At least %d business days’ notice (weekends don’t count), and earlier is better. Lead time depends on the date, quantity and menu mix, and is confirmed before acceptance.', $notice_days, 'doughboss' ), $notice_days ) : __( 'As early as you can. Lead time depends on the date, quantity and menu mix, and is confirmed before acceptance.', 'doughboss' ) ); ?></p></details>
 				<details><summary><?php esc_html_e( 'Where is catering prepared?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'Catering is prepared through our Revesby bakery for now. Ask the team what collection or other arrangement is available.', 'doughboss' ); ?></p></details>
 				<details><summary><?php esc_html_e( 'Can you help with dietary requirements?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'Tell us about dietary needs and allergies. We can explain suitable choices, but our kitchen handles common allergens and cannot promise an allergen-free environment.', 'doughboss' ); ?></p></details>
 				<details><summary><?php esc_html_e( 'Is there a minimum order?', 'doughboss' ); ?></summary><p><?php esc_html_e( 'The team will recommend practical quantities for your guest count and explain any package requirement before you confirm.', 'doughboss' ); ?></p></details>
@@ -311,13 +339,80 @@ class DoughBoss_Shortcodes {
 			$atts,
 			'doughboss_menu'
 		);
+		$posts = get_posts(
+			array(
+				'post_type'   => DoughBoss_Post_Types::POST_TYPE,
+				'post_status' => 'publish',
+				'numberposts' => 200,
+				'orderby'     => array( 'menu_order' => 'ASC', 'title' => 'ASC' ),
+			)
+		);
+		$categories = array();
+		foreach ( $posts as $post ) {
+			$terms    = get_the_terms( $post->ID, DoughBoss_Post_Types::TAXONOMY );
+			$category = ( $terms && ! is_wp_error( $terms ) ) ? $terms[0]->name : __( 'Menu', 'doughboss' );
+			if ( ! isset( $categories[ $category ] ) ) {
+				$categories[ $category ] = array();
+			}
+			$categories[ $category ][] = $post;
+		}
 		ob_start();
 		?>
 		<div class="db-app db-menu" data-doughboss-menu data-cart-url="<?php echo esc_url( $atts['cart_url'] ); ?>">
-			<div class="db-loading" role="status" aria-live="polite"><?php esc_html_e( 'Loading menu…', 'doughboss' ); ?></div>
+			<div class="db-menu-fallback" data-doughboss-menu-fallback>
+				<?php if ( empty( $categories ) ) : ?>
+					<p class="db-empty"><?php esc_html_e( 'No menu items yet.', 'doughboss' ); ?></p>
+				<?php else : ?>
+					<?php foreach ( $categories as $category => $items ) : ?>
+						<section class="db-menu-fallback-section">
+							<h2 class="db-category"><?php echo esc_html( $category ); ?></h2>
+							<ul class="db-menu-fallback-list">
+								<?php foreach ( $items as $item ) : ?>
+									<li class="db-menu-fallback-item">
+										<div class="db-menu-fallback-item-heading">
+											<h3><?php echo esc_html( $item->post_title ); ?></h3>
+											<span class="db-price"><?php echo esc_html( DoughBoss_Settings::format_price( (float) get_post_meta( $item->ID, DoughBoss_Post_Types::META_PRICE, true ) ) ); ?></span>
+										</div>
+										<?php $description = DoughBoss_Post_Types::plain_menu_description( $item->post_excerpt ? $item->post_excerpt : $item->post_content ); ?>
+										<?php if ( '' !== $description ) : ?>
+											<?php // Escape plain text with double encoding: remaining entity syntax must match the JSON/textContent display. ?>
+											<p><?php echo htmlspecialchars( $description, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8', true ); ?></p>
+										<?php endif; ?>
+									</li>
+								<?php endforeach; ?>
+							</ul>
+						</section>
+					<?php endforeach; ?>
+				<?php endif; ?>
+			</div>
 		</div>
+		<?php echo self::phone_order_bar(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the helper. ?>
 		<?php
 		return ob_get_clean();
+	}
+
+	/**
+	 * One sticky "Call to order" bar shown while online ordering is paused.
+	 *
+	 * Rendered on every menu so the storefront script can reveal or hide it
+	 * from the live /config read (cached pages included): hidden when ordering
+	 * is open, where the per-card add-to-cart controls take over again.
+	 *
+	 * @return string
+	 */
+	public static function phone_order_bar() {
+		$phone   = DoughBoss_Settings::order_phone();
+		$tel     = DoughBoss_Settings::phone_tel( $phone );
+		$display = DoughBoss_Settings::phone_display( $phone );
+		return sprintf(
+			'<aside class="db-callbar" data-doughboss-callbar aria-label="%1$s"%2$s><p class="db-callbar-text"><strong>%3$s</strong> <span>%4$s</span></p><a class="db-callbar-btn" href="%5$s"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z" fill="currentColor"/></svg><span>%6$s</span></a></aside>',
+			esc_attr__( 'Order by phone', 'doughboss' ),
+			DoughBoss_Settings::ordering_open() ? ' hidden' : '',
+			esc_html__( 'Online ordering is paused.', 'doughboss' ),
+			esc_html__( 'Call us to order for pickup.', 'doughboss' ),
+			esc_attr( 'tel:' . $tel ),
+			esc_html( sprintf( /* translators: %s: phone number. */ __( 'Call to order %s', 'doughboss' ), $display ) )
+		);
 	}
 
 	/**

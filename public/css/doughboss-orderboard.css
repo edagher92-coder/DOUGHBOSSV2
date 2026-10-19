@@ -187,6 +187,26 @@ body.db-alerting .db-board-bar h1::after {
 .db-preorder-contact-check input { margin-top: 0.2rem; }
 .db-preorder-eta { min-height: 40px; max-width: 13rem; }
 
+.db-preorder-delivery-warning {
+	margin-top: 0.75rem;
+	padding: 0.75rem;
+	border: 2px solid var(--dbb-danger);
+	border-radius: var(--r-sm);
+	background: #fff0f0;
+	color: #671515;
+	font-weight: 700;
+}
+
+.db-preorder-recovery {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.db-preorder-recovery .button {
+	min-height: 44px;
+}
+
 /* Kitchen tablets are commonly 768-1100px wide. Keep two live queues in
    view there; collapsing every lane to one vertical list makes a busy service
    needlessly slow. Only phones get the single-column fallback. */
@@ -1131,4 +1151,111 @@ body.doughboss-staff-kitchen .doughboss-board--screen-catering .db-catering-read
 	body.doughboss-staff-kitchen .db-live-graph {
 		grid-template-columns: 3.8rem minmax(92px, 1fr) 2rem;
 	}
+}
+
+/* --- 2.51 timed pickup: Upcoming strip, badges, delay ------------------ */
+
+.db-card-badge {
+	font-size: 0.7rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	padding: 0.1rem 0.45rem;
+	border-radius: 4px;
+}
+.db-badge-asap { background: #fde6c4; color: #7a4b00; }
+.db-badge-scheduled { background: #dbe8fb; color: #14407a; }
+
+.db-card-pickup {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem 0.6rem;
+	margin: 0.2rem 0 0.35rem;
+}
+.db-card-pickup-time {
+	font-size: 1.35rem;
+	font-weight: 800;
+	line-height: 1.15;
+	color: var(--dbb-ink);
+}
+.db-delay-chip {
+	font-size: 0.8rem;
+	font-weight: 700;
+	padding: 0.15rem 0.55rem;
+	border-radius: 999px;
+	background: #fff0c2;
+	color: #6d4a00;
+	border: 1px solid #e0b84a;
+}
+
+.db-card-actions-timed .db-accept { flex: 1 1 8rem; justify-content: center; }
+.db-delay { min-width: 7rem; justify-content: center; font-weight: 700; }
+
+.db-upcoming-pill {
+	display: inline-block;
+	margin-left: 0.5rem;
+	padding: 0.15rem 0.6rem;
+	border-radius: 999px;
+	font-size: 0.8rem;
+	font-weight: 700;
+	background: #dbe8fb;
+	color: #14407a;
+}
+
+.db-upcoming {
+	margin: 0 0 0.9rem;
+	border: 1px solid var(--dbb-line);
+	border-radius: var(--r-md);
+	background: var(--dbb-paper-soft);
+}
+.db-upcoming-summary {
+	cursor: pointer;
+	min-height: 48px;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.5rem 0.9rem;
+	font-weight: 700;
+	list-style-position: inside;
+}
+.db-upcoming-summary small { font-weight: 400; color: var(--dbb-muted); }
+.db-upcoming-list {
+	list-style: none;
+	margin: 0;
+	padding: 0 0.9rem 0.6rem;
+}
+.db-upcoming-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.25rem 0.9rem;
+	padding: 0.55rem 0;
+	border-top: 1px solid var(--dbb-line);
+}
+.db-upcoming-time { font-weight: 800; font-size: 1.05rem; min-width: 7rem; }
+.db-upcoming-number { font-weight: 700; }
+.db-upcoming-items,
+.db-upcoming-start { color: var(--dbb-muted); font-size: 0.9rem; }
+
+body.doughboss-staff-kitchen .db-card-pickup-time { color: var(--dbb-kds-cream, #fff4df); font-size: 1.6rem; }
+body.doughboss-staff-kitchen .db-badge-asap { background: rgba(240, 165, 41, 0.22); color: var(--dbb-kds-amber, #f0a529); }
+body.doughboss-staff-kitchen .db-badge-scheduled { background: rgba(110, 168, 254, 0.2); color: #9cc4ff; }
+body.doughboss-staff-kitchen .db-delay-chip { background: rgba(240, 165, 41, 0.18); color: var(--dbb-kds-amber, #f0a529); border-color: rgba(240, 165, 41, 0.5); }
+body.doughboss-staff-kitchen .db-upcoming-pill { background: rgba(110, 168, 254, 0.2); color: #9cc4ff; }
+body.doughboss-staff-kitchen .db-upcoming {
+	background: var(--dbb-kds-panel, rgba(24, 19, 15, 0.92));
+	border-color: var(--dbb-kds-line, rgba(255, 237, 205, 0.15));
+	color: var(--dbb-kds-cream, #fff4df);
+}
+body.doughboss-staff-kitchen .db-upcoming-row { border-top-color: var(--dbb-kds-line, rgba(255, 237, 205, 0.15)); }
+body.doughboss-staff-kitchen .db-upcoming-summary small,
+body.doughboss-staff-kitchen .db-upcoming-items,
+body.doughboss-staff-kitchen .db-upcoming-start { color: var(--dbb-kds-muted, rgba(255, 244, 223, 0.68)); }
+
+/* Kitchen tablets: Accept and +10 min must be easy to hit with floury hands. */
+@media (pointer: coarse), (max-width: 1100px) {
+	.db-card-actions-timed .db-accept,
+	.db-card-actions .db-delay { min-height: 64px; font-size: 1.1rem; padding: 0.75rem 1.25rem; }
+	.db-upcoming-summary { min-height: 56px; font-size: 1.05rem; }
 }

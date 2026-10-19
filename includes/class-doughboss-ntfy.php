@@ -65,7 +65,7 @@ class DoughBoss_Ntfy {
 		}
 
 		$order = DoughBoss_Order::get( $order_id );
-		if ( ! $order ) {
+		if ( ! $order || DoughBoss_Order::is_preorder_request( $order ) ) {
 			return;
 		}
 

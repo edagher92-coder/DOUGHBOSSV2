@@ -40,7 +40,7 @@ class DoughBoss_Payment {
 			'square' => 'DoughBoss_Square',
 		);
 		$gateway = DoughBoss_Settings::payment_gateway();
-		return isset( $classes[ $gateway ] ) ? $classes[ $gateway ] : $classes['stripe'];
+		return isset( $classes[ $gateway ] ) ? $classes[ $gateway ] : $classes['square'];
 	}
 
 	/**
@@ -56,7 +56,7 @@ class DoughBoss_Payment {
 			'square' => 'Square',
 		);
 		$gateway = DoughBoss_Settings::payment_gateway();
-		return isset( $labels[ $gateway ] ) ? $labels[ $gateway ] : $labels['stripe'];
+		return isset( $labels[ $gateway ] ) ? $labels[ $gateway ] : $labels['square'];
 	}
 
 	/**

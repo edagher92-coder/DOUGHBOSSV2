@@ -1,5 +1,7 @@
 <?php
 $ordering_open = doughboss_final_ordering_open();
+// page-menu.php renders this template too: give /menu/ its own H1 and lede.
+$is_menu_page = is_page( 'menu' );
 $ordering_status = doughboss_final_shortcode_or_notice(
 	'[doughboss_ordering_status]',
 	$ordering_open
@@ -14,16 +16,20 @@ if ( ! $has_ordering_status ) {
 get_header();
 ?>
 <section class="dbf-page-hero dbf-page-hero--order" aria-labelledby="dbf-order-title">
-	<?php echo doughboss_final_asset_image( 'menu/real-v1/sujuk-deluxe.jpg', '', array( 'class' => 'dbf-page-hero-bg', 'decoding' => 'async', 'fetchpriority' => 'high' ) ); ?>
+	<?php echo doughboss_final_asset_image( 'menu/real-v1/sujuk-deluxe.jpg', __( 'Dough Boss Sujuk Deluxe pizza fresh from the oven', 'doughboss-final' ), array( 'class' => 'dbf-page-hero-bg', 'decoding' => 'async', 'fetchpriority' => 'high' ) ); ?>
 	<div class="dbf-wrap dbf-page-hero-inner">
 		<h1 id="dbf-order-title" class="dbf-display">
-			<?php if ( $ordering_open ) : ?>
+			<?php if ( $is_menu_page ) : ?>
+				<?php esc_html_e( 'Our', 'doughboss-final' ); ?> <em><?php esc_html_e( 'menu.', 'doughboss-final' ); ?></em>
+			<?php elseif ( $ordering_open ) : ?>
 				<?php esc_html_e( 'Order', 'doughboss-final' ); ?> <em><?php esc_html_e( 'online.', 'doughboss-final' ); ?></em>
 			<?php else : ?>
 				<?php esc_html_e( 'Browse', 'doughboss-final' ); ?> <em><?php esc_html_e( 'the menu.', 'doughboss-final' ); ?></em>
 			<?php endif; ?>
 		</h1>
-		<p class="dbf-lede"><?php echo esc_html( $ordering_open ? __( 'Choose your favourites and review your order.', 'doughboss-final' ) : __( 'Online ordering is paused. Browse the menu and check your shop.', 'doughboss-final' ) ); ?></p>
+		<p class="dbf-lede"><?php echo esc_html( $is_menu_page
+			? ( $ordering_open ? __( 'Manoush, pizza, pies and wraps, baked fresh to order. Add your favourites and order online.', 'doughboss-final' ) : __( 'Manoush, pizza, pies and wraps, baked fresh to order. Online ordering is paused; check your shop before visiting.', 'doughboss-final' ) )
+			: ( $ordering_open ? __( 'Choose your favourites and review your order.', 'doughboss-final' ) : __( 'Online ordering is paused. Browse the menu and check your shop.', 'doughboss-final' ) ) ); ?></p>
 	</div>
 </section>
 <div class="dbf-order-stage">
@@ -44,8 +50,8 @@ get_header();
 			<?php echo doughboss_final_shortcode_or_notice( '[doughboss_menu]', __( 'The menu is temporarily unavailable. Please try again shortly.', 'doughboss-final' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php if ( $ordering_open ) : ?>
 				<div class="dbf-builder-wrap"><?php echo doughboss_final_shortcode_or_notice( '[doughboss_builder]', __( 'Customization is temporarily unavailable.', 'doughboss-final' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
-				<div class="dbf-cart-wrap"><?php echo doughboss_final_shortcode_or_notice( '[doughboss_cart]', __( 'Checkout is temporarily unavailable.', 'doughboss-final' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
 			<?php endif; ?>
+			<div class="dbf-cart-wrap"<?php echo $ordering_open ? '' : ' hidden'; ?>><?php echo doughboss_final_shortcode_or_notice( '[doughboss_cart]', __( 'Checkout is temporarily unavailable.', 'doughboss-final' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
 		</section>
 	</div>
 </div>

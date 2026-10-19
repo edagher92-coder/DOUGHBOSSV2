@@ -33,6 +33,27 @@
 		return 'Pickup hours unconfirmed. Please check with the shop.';
 	}
 
+	// Header/nav controls rendered for one ordering state carry both variants
+	// (data-db-open-* / data-db-paused-*). Pages can be cached, so the live
+	// /config read decides: "Call to order" while paused, normal links when open.
+	function syncOrderingState(open) {
+		if (typeof document.querySelectorAll !== 'function') { return; }
+		var state = open ? 'open' : 'paused';
+		Array.prototype.forEach.call(document.querySelectorAll('[data-db-ordering-swap]'), function (link) {
+			var href = link.getAttribute('data-db-' + state + '-href');
+			var label = link.getAttribute('data-db-' + state + '-label');
+			if (href && link.getAttribute('href') !== href) { link.setAttribute('href', href); }
+			if (label && link.textContent !== label) { link.textContent = label; }
+		});
+		Array.prototype.forEach.call(document.querySelectorAll('[data-db-when-ordering]'), function (node) {
+			node.hidden = node.getAttribute('data-db-when-ordering') !== state;
+		});
+		if (document.body && document.body.classList) {
+			document.body.classList.toggle('dbf-ordering-open', open);
+			document.body.classList.toggle('dbf-ordering-paused', !open);
+		}
+	}
+
 	function locationById(locations, id) {
 		return locations.filter(function (location) { return Number(location.id) === Number(id); })[0] || null;
 	}
@@ -69,6 +90,7 @@
 				watch.location = locationById(snapshot.locations, watch.id);
 				watch.config = snapshot.config;
 			});
+			syncOrderingState(snapshot.config.ordering_open === true);
 			paint();
 			return snapshot;
 		}).then(function (result) { snapshotRequest = null; return result; }, function (error) {
@@ -104,8 +126,11 @@
 	function chosenId(locations) {
 		if (locationById(locations, latestLocationId)) { return latestLocationId; }
 		var saved = 0;
-		try { saved = Number(window.localStorage.getItem('doughboss_location')); } catch (error) { /* Optional preference only. */ }
-		return locationById(locations, saved) ? saved : (locations.length ? Number(locations[0].id) : 0);
+		try { saved = window.DoughBossPreferences ? window.DoughBossPreferences.readShop() : 0; } catch (error) { /* Optional preference only. */ }
+		if (locationById(locations, saved)) { latestLocationId = saved; return saved; }
+		// Store-first (2.51.0): with several shops nothing is assumed until the
+		// customer picks one. A single shop is still the implicit choice.
+		return locations.length === 1 ? Number(locations[0].id) : 0;
 	}
 
 	function renderHeader(root) {
@@ -133,6 +158,13 @@
 				option.textContent = location.name;
 				select.appendChild(option);
 			});
+			if (!current) {
+				var placeholder = document.createElement('option');
+				placeholder.value = '0';
+				placeholder.disabled = true;
+				placeholder.textContent = 'Choose your shop';
+				select.insertBefore(placeholder, select.firstChild);
+			}
 			select.value = String(current);
 			// One real online location is not presented as three orderable stores.
 			if (locations.length > 1) { label.appendChild(select); }
@@ -148,6 +180,10 @@
 			function show(id) {
 				current = id;
 				select.value = String(id);
+				if (!id) {
+					status.textContent = 'Choose your shop to see pickup hours.';
+					return;
+				}
 				attach(status, locationById(snapshot.locations, id), snapshot.config);
 			}
 			select.addEventListener('change', function () {
@@ -155,7 +191,7 @@
 				var intent = new CustomEvent('doughboss:shop-change-request', { cancelable: true, detail: { id: id } });
 				// The ordering application can veto an immutable in-flight checkout.
 				if (!document.dispatchEvent(intent) || !locationById(snapshot.locations, id)) { select.value = String(current); return; }
-				try { window.localStorage.setItem('doughboss_location', String(id)); } catch (error) { /* Current-page selection still works. */ }
+				try { if (window.DoughBossPreferences) { window.DoughBossPreferences.writeShop(id); } } catch (error) { /* Current-page selection still works. */ }
 				show(id);
 				document.dispatchEvent(new CustomEvent('doughboss:shop-changed', { detail: { id: id } }));
 			});
@@ -186,21 +222,42 @@
 		});
 		tickTimer = setTimeout(tick, Math.max(100, delay));
 	}
+	// Shop status changes slowly: refresh the public reads every 120s. The
+	// server's pickup-hours evidence is only valid for 60s, so while ordering
+	// is open and a shown status has expired, refresh early (at most every 30s)
+	// rather than show "unconfirmed". While paused the text needs no evidence.
+	var REFRESH_MS = 120000;
+	var EXPIRED_REFRESH_MS = 30000;
+	function evidenceExpired(now) {
+		return watches.some(function (watch) {
+			var status = watch.location && watch.location.pickup_status;
+			var expires = status && Date.parse(status.expires_at_utc);
+			return !!(watch.config && watch.config.ordering_open && status && Number.isFinite(expires) && expires <= now);
+		});
+	}
+	function refreshDue(now) {
+		var since = now - lastRefresh;
+		return since >= REFRESH_MS || (since >= EXPIRED_REFRESH_MS && evidenceExpired(now));
+	}
 	function tick() {
-		if (!document.hidden) {
-			paint();
-			if (watches.length && Date.now() - lastRefresh >= 45000) { refresh().catch(function () {}); }
+		if (document.hidden) {
+			// Background tab: stop polling entirely; visibilitychange resumes.
+			if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
+			return;
 		}
+		paint();
+		if (watches.length && refreshDue(Date.now())) { refresh().catch(function () {}); }
 		scheduleTick();
 	}
 	function boot() {
 		document.querySelectorAll('[data-doughboss-header-shop]').forEach(renderHeader);
 		tick();
 		document.addEventListener('visibilitychange', function () {
-			if (!document.hidden) {
-				paint();
-				if (watches.length && Date.now() - lastRefresh >= 45000) { refresh().catch(function () {}); }
+			if (document.hidden) {
+				if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
+				return;
 			}
+			tick();
 		});
 	}
 	if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', boot); }

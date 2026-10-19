@@ -1,4 +1,902 @@
 <?php
+
+if ( ! function_exists( 'wp_json_encode' ) ) {
+	/** @return string|false */
+	function wp_json_encode( $data ) {
+		return json_encode( $data );
+	}
+}
+
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-order.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-dashboard.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-square-orders.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-payment-legs.php';
+require_once dirname( __DIR__ ) . '/includes/class-doughboss-payment.php';
+
+db_test( 'Square token observation accepts documented non-expiring tokens without inventing an expiry', function () {
+	$method = new ReflectionMethod( 'DoughBoss_Square', 'catalogue_identity' );
+	$method->setAccessible( true );
+	$app = 'sandbox-sq0idb-SYNTHETIC123';
+	$response = array( 'client_id' => $app, 'merchant_id' => 'MERCHANTSYNTHETIC01', 'scopes' => array( 'ORDERS_READ', 'MERCHANT_PROFILE_READ' ) );
+	$observed = $method->invoke( null, $response, $app );
+	assert_false( is_wp_error( $observed ), 'a successful token-status response may omit expiry for a non-expiring personal token' );
+	if ( is_wp_error( $observed ) ) { return; }
+	assert_same( '', $observed['expires_at'], 'absence uses the existing non-expiring representation, not a fabricated date' );
+	assert_same( $app, $observed['application_id'], 'exact application identity is retained' );
+	assert_same( $response['merchant_id'], $observed['merchant_id'], 'exact merchant identity is retained' );
+	assert_same( array( 'MERCHANT_PROFILE_READ', 'ORDERS_READ' ), $observed['scopes'], 'observed scopes remain exact and canonically sorted' );
+	$response['expires_at'] = '';
+	assert_same( $observed, $method->invoke( null, $response, $app ), 'explicit empty expiry has the same existing canonical meaning' );
+	$response['expires_at'] = gmdate( 'Y-m-d\TH:i:s\Z', time() + 86400 );
+	$future = $method->invoke( null, $response, $app );
+	assert_false( is_wp_error( $future ), 'valid future expiry remains accepted' );
+	assert_same( $response['expires_at'], $future['expires_at'], 'actual provider expiry is retained without modification' );
+} );
+
+db_test( 'Square final observation check still requires explicit retained expiry evidence', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	try {
+		doughboss_test_set_settings( db_square_settings() );
+		$view = array( 'application_id' => DoughBoss_Settings::square_application_id(), 'merchant_id' => 'MERCHANTSYNTHETIC01', 'credential_scopes' => array( 'MERCHANT_PROFILE_READ' ), 'credential_expires_at' => '' );
+		assert_same( true, DoughBoss_Square::validate_locations_observation_expiry( $view ), 'canonical non-expiring observation survives the final expiry check' );
+		unset( $view['credential_expires_at'] );
+		assert_true( is_wp_error( DoughBoss_Square::validate_locations_observation_expiry( $view ) ), 'missing retained view evidence is not treated as a provider non-expiring response' );
+		$view['credential_expires_at'] = gmdate( 'Y-m-d\TH:i:s\Z', time() - 60 );
+		assert_true( is_wp_error( DoughBoss_Square::validate_locations_observation_expiry( $view ) ), 'expiry reached before final disclosure is still denied' );
+		$view['credential_expires_at'] = '';
+		$view['application_id'] = 'sandbox-sq0idb-OTHER123';
+		assert_true( is_wp_error( DoughBoss_Square::validate_locations_observation_expiry( $view ) ), 'no-expiry evidence cannot authorise a different configured application' );
+	} finally {
+		doughboss_test_set_settings( $original );
+	}
+} );
+
+db_test( 'Square optional token expiry does not relax malformed, expired or identity evidence', function () {
+	$method = new ReflectionMethod( 'DoughBoss_Square', 'catalogue_identity' );
+	$method->setAccessible( true );
+	$app = 'sandbox-sq0idb-SYNTHETIC123';
+	$base = array( 'client_id' => $app, 'merchant_id' => 'MERCHANTSYNTHETIC01', 'scopes' => array( 'MERCHANT_PROFILE_READ' ) );
+	foreach ( array( null, false, 0, array(), 'never', '2026-02-30T12:00:00Z', '2026-01-01T00:00:00.1.2Z', gmdate( 'Y-m-d\TH:i:s\Z', time() - 60 ) ) as $expiry ) {
+		assert_true( is_wp_error( $method->invoke( null, array_merge( $base, array( 'expires_at' => $expiry ) ), $app ) ), 'present malformed or expired expiry remains denied' );
+	}
+	foreach ( array(
+		array( 'client_id' => 'sandbox-sq0idb-OTHER123' ),
+		array( 'merchant_id' => '' ),
+		array( 'scopes' => null ),
+		array( 'scopes' => array( 'MERCHANT_PROFILE_READ', 'MERCHANT_PROFILE_READ' ) ),
+		array( 'scopes' => array( 'invalid scope' ) ),
+		array( 'errors' => array() ),
+	) as $override ) {
+		assert_true( is_wp_error( $method->invoke( null, array_merge( $base, $override ), $app ) ), 'missing expiry cannot bypass contradictory identity/scope evidence' );
+	}
+	foreach ( array( 'client_id', 'merchant_id', 'scopes' ) as $required ) {
+		$response = $base;
+		unset( $response[ $required ] );
+		assert_true( is_wp_error( $method->invoke( null, $response, $app ) ), 'other required token evidence must remain present' );
+	}
+} );
+
+db_test( 'Square mapped readiness preserves legacy and activation gates', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	$maps = array( 'revesby' => 'LMAPPED_REVESBY', 'bankstown' => 'LMAPPED_BANKSTOWN', 'roselands' => 'LMAPPED_ROSELANDS' );
+	try {
+		foreach ( array( 'test', 'live' ) as $mode ) {
+			$settings = db_square_settings( array( 'square_mode' => $mode, 'square_live_approved' => 1,
+				'square_test_location_id' => '', 'square_live_location_id' => '',
+				'square_test_location_map' => $maps, 'square_live_location_map' => $maps ) );
+			doughboss_test_set_settings( $settings );
+			assert_false( DoughBoss_Square::ready(), 'legacy global readiness still requires a global location' );
+			assert_false( DoughBoss_Payment::ready(), 'the zero-context facade remains global' );
+			foreach ( array_keys( $maps ) as $shop ) {
+				assert_true( DoughBoss_Settings::square_shop_ready( $shop ), 'exact mapped shop can be locally configured without a legacy ID' );
+			}
+			foreach ( array( 'planned', 'unknown', 'Revesby', 'revesby ', 1, null, array() ) as $shop ) {
+				assert_false( DoughBoss_Settings::square_shop_ready( $shop ), 'unsupported or non-exact shop never inherits a binding' );
+			}
+			$credential_prefix = 'square_' . $mode;
+			$denials = array( array( 'payments_enabled' => 0 ), array( 'payment_gateway' => 'stripe' ),
+				array( $credential_prefix . '_app_id' => '' ), array( $credential_prefix . '_access_token' => '' ),
+				array( $credential_prefix . '_access_token' => 'short' ), array( $credential_prefix . '_location_map' => array() ),
+				array( $credential_prefix . '_location_map' => array( 'revesby' => 'LDUPLICATE', 'bankstown' => 'LDUPLICATE' ) ) );
+			if ( 'live' === $mode ) {
+				$denials[] = array( 'square_live_approved' => 0 );
+				$denials[] = array( 'square_live_webhook_key' => '' );
+			}
+			foreach ( $denials as $overrides ) {
+				doughboss_test_set_settings( array_merge( $settings, $overrides ) );
+				assert_false( DoughBoss_Settings::square_shop_ready( 'revesby' ), 'mapped readiness retains every master, credential, environment and live approval guard' );
+			}
+		}
+		foreach ( array( null, 0, -1, '1', 1.0, true, array() ) as $native_id ) {
+			assert_false( DoughBoss_Square::ready_for_location( $native_id ), 'native-location readiness rejects coercible or missing identity before storage access' );
+		}
+		doughboss_test_set_settings( db_square_settings( array( 'square_test_location_id' => '', 'square_test_location_map' => $maps ) ) );
+		$status = DoughBoss_Square_Dashboard::view();
+		assert_true( $status['connection']['credentials_present'], 'dashboard credentials do not require an obsolete global location' );
+		assert_same( 'configured_unverified', $status['connection']['state'], 'credentials are configuration, not connection proof' );
+		assert_false( $status['connection']['provider_verified'], 'valid credentials and mappings still do not attest provider verification' );
+	} finally {
+		doughboss_test_set_settings( $original );
+	}
+} );
+
+db_test(
+	'split recovery rejects coercible and malformed inputs before storage or HTTP',
+	function () {
+		$valid = array( 42, 2, 0, 'sqpayKnownSplit00042' );
+		$cases = array(
+			array( 0, '42' ), array( 0, 0 ), array( 0, -1 ), array( 0, 42.0 ), array( 0, true ),
+			array( 1, '2' ), array( 1, 0 ), array( 1, PHP_INT_MAX ),
+			array( 2, '0' ), array( 2, -1 ), array( 2, 2 ), array( 2, false ),
+			array( 3, null ), array( 3, 12345678 ), array( 3, array() ), array( 3, '' ),
+			array( 3, 'short' ), array( 3, ' sqpayKnownSplit00042' ), array( 3, 'sqpayKnownSplit00042 ' ),
+			array( 3, "sqpayKnownSplit00042\n" ), array( 3, 'sqpay/known00042' ),
+			array( 3, '4111111111111111' ), array( 3, str_repeat( 'x', 192 ) ),
+		);
+		foreach ( $cases as $case ) {
+			$args = $valid;
+			$args[ $case[0] ] = $case[1];
+			$error = DoughBoss_Square::reconcile_split_authorization( $args[0], $args[1], $args[2], $args[3] );
+			assert_true( is_wp_error( $error ), 'malformed recovery input is denied before repository/provider access' );
+			assert_same( false, $error->get_error_data()['retry_safe'], 'denial never permits a new payment' );
+		}
+	}
+);
+
+/** A deliberately local, inert split-leg observation fixture. */
+function db_split_leg_observation_fixture( $index = 0, $amount = 900 ) {
+	$parent = array(
+		'id'                       => 42,
+		'currency'                 => 'AUD',
+		'provider_order_reference' => 'squareORDERsplit00042',
+		'safe_metadata_json'       => wp_json_encode( array( 'square_location_id' => 'LTESTLOCATION123' ) ),
+	);
+	$leg = array(
+		'payment_attempt_id'     => 42,
+		'leg_index'               => $index,
+		'tender_kind'             => 0 === $index ? 'gift_card' : 'card',
+		'requested_amount_minor' => $amount,
+		'currency'                => 'AUD',
+	);
+	$payment = array(
+		'id'           => 0 === $index ? 'sqpaySplitGift000042' : 'sqpaySplitCard000042',
+		'order_id'     => $parent['provider_order_reference'],
+		'location_id'  => 'LTESTLOCATION123',
+		'reference_id' => DoughBoss_Payment_Legs::leg_reference( 42, $index ),
+		'status'       => 'APPROVED',
+		'source_type'  => 'CARD',
+		'amount_money' => array( 'amount' => $amount, 'currency' => 'AUD' ),
+		'card_details' => array( 'status' => 'AUTHORIZED', 'card' => array( 'card_brand' => 0 === $index ? 'SQUARE_GIFT_CARD' : 'VISA' ) ),
+	);
+	return array( $parent, $leg, $payment );
+}
+
+db_test(
+	'split ledger observation validation accepts only exact delayed-authorisation facts',
+	function () {
+		list( $parent, $gift, $payment ) = db_split_leg_observation_fixture();
+		assert_same(
+			array( 'provider_payment_reference' => 'sqpaySplitGift000042', 'authorized_amount_minor' => 900 ),
+			DoughBoss_Payment_Legs::validate_observation( $parent, $gift, $payment ),
+			'exact gift authorization retains only its id and actual authorized minor units'
+		);
+		list( $parent, $card, $payment ) = db_split_leg_observation_fixture( 1, 500 );
+		assert_same(
+			array( 'provider_payment_reference' => 'sqpaySplitCard000042', 'authorized_amount_minor' => 500 ),
+			DoughBoss_Payment_Legs::validate_observation( $parent, $card, $payment ),
+			'exact card remainder authorization is accepted'
+		);
+		foreach ( array(
+			'wrong_order' => array( 'order_id' => 'squareORDERother00042' ),
+			'wrong_location' => array( 'location_id' => 'OTHERLOCATION123' ),
+			'wrong_reference' => array( 'reference_id' => 'db-split-42-9' ),
+			'wrong_status' => array( 'status' => 'COMPLETED' ),
+			'wrong_source' => array( 'source_type' => 'CASH' ),
+			'wrong_card_status' => array( 'card_details' => array( 'status' => 'COMPLETED', 'card' => array( 'card_brand' => 'SQUARE_GIFT_CARD' ) ) ),
+			'wrong_currency' => array( 'amount_money' => array( 'amount' => 900, 'currency' => 'USD' ) ),
+			'wrong_brand' => array( 'card_details' => array( 'status' => 'AUTHORIZED', 'card' => array( 'card_brand' => 'VISA' ) ) ),
+			'pan_shaped_id' => array( 'id' => '4111111111111111' ),
+		) as $label => $changes ) {
+			list( $parent, $gift, $payment ) = db_split_leg_observation_fixture();
+			$payment = array_replace_recursive( $payment, $changes );
+			assert_false( DoughBoss_Payment_Legs::validate_observation( $parent, $gift, $payment ), $label . ' is not a valid gift-leg observation' );
+		}
+	}
+);
+
+db_test(
+	'split ledger observation validation denies non-integer, zero, excessive, and wrong-card economics',
+	function () {
+		foreach ( array( 0, -1, 901, 900.0, '900' ) as $amount ) {
+			list( $parent, $gift, $payment ) = db_split_leg_observation_fixture();
+			$payment['amount_money']['amount'] = $amount;
+			assert_false( DoughBoss_Payment_Legs::validate_observation( $parent, $gift, $payment ), 'gift amount is strict integer and within requested amount' );
+		}
+		list( $parent, $card, $payment ) = db_split_leg_observation_fixture( 1, 500 );
+		$payment['amount_money']['amount'] = 499;
+		assert_false( DoughBoss_Payment_Legs::validate_observation( $parent, $card, $payment ), 'card remainder must equal its server-derived requested amount' );
+		$payment['card_details']['card']['card_brand'] = 'SQUARE_GIFT_CARD';
+		assert_false( DoughBoss_Payment_Legs::validate_observation( $parent, $card, $payment ), 'card remainder cannot be a second gift card authorization' );
+		assert_same( 'db-split-42-0', DoughBoss_Payment_Legs::leg_reference( 42, 0 ), 'leg reference is stable and server generated' );
+		assert_same( '', DoughBoss_Payment_Legs::leg_reference( '42', 0 ), 'leg reference refuses loosely typed parent identity' );
+	}
+);
+
+/** Synthetic immutable itemization; no catalog, provider or customer records. */
+function db_square_orders_projection_fixture( $inclusive = true, $discount = true, $delivery = true ) {
+	$tax = $inclusive ? ( $delivery ? 212 : 182 ) : 200;
+	if ( ! $discount ) {
+		$tax = $inclusive ? ( $delivery ? 230 : 200 ) : 220;
+	}
+	$payload = array(
+		'order' => array(
+			'currency' => 'AUD', 'subtotal' => '22.00', 'discount' => $discount ? '2.00' : '0.00',
+			'delivery_fee' => $delivery ? '3.30' : '0.00', 'tax' => $tax / 100,
+			'total' => ( 2200 - ( $discount ? 200 : 0 ) + ( $delivery ? 330 : 0 ) + ( $inclusive ? 0 : $tax ) ) / 100,
+			'accounting_basis' => array( 'version' => 1, 'tax_inclusive' => $inclusive, 'tax_rate' => 10,
+				'discount_policy' => 'goods_before_tax', 'delivery_taxable' => $inclusive ),
+		),
+		'lines' => array( array( 'name' => 'Signature pizza', 'size' => 'Large', 'quantity' => '2',
+			'unit_price' => '11.00', 'line_total' => '22.00',
+			'toppings' => array( array( 'slug' => 'add--sujuk', 'label' => 'Add sujuk', 'price' => 2.0 ),
+				array( 'slug' => 'remove--onion', 'label' => 'No onion', 'price' => 0.0 ) ),
+		) ),
+	);
+	return array( $payload, array( 'shop_slug' => 'revesby', 'square_location_id' => 'LOCATION_R_TEST', 'square_mode' => 'test' ) );
+}
+
+/** Explicit synthetic provider rollups, not a Square calculation simulation. */
+function db_square_orders_response_fixture( array $projection ) {
+	$order = $projection['order'];
+	$currency = $projection['currency'];
+	$money = function ( $amount ) use ( $currency ) { return array( 'amount' => $amount, 'currency' => $currency ); };
+	$order['id'] = 'squareORDEREXAMPLE00000001';
+	$order['version'] = 1;
+	$fee_tax = $projection['tax_inclusive'] && $projection['amounts']['delivery_fee'] > 0 ? 30 : 0;
+	foreach ( $order['line_items'] as &$row ) {
+		$is_fee = 'db-delivery' === $row['uid'];
+		$base = $row['base_price_money']['amount'] * (int) $row['quantity'];
+		$discount = $is_fee ? 0 : $projection['amounts']['discount'];
+		$tax = $is_fee ? $fee_tax : $projection['amounts']['tax'] - $fee_tax;
+		$row['item_type'] = 'ITEM';
+		$row['gross_sales_money'] = $money( $base );
+		$row['variation_total_price_money'] = $money( $base );
+		$row['total_tax_money'] = $money( $tax );
+		$row['total_discount_money'] = $money( $discount );
+		$row['total_money'] = $money( $base - $discount + ( $projection['tax_inclusive'] ? 0 : $tax ) );
+		if ( ! empty( $row['applied_taxes'] ) ) {
+			$row['applied_taxes'][0]['uid'] = 'generated-tax-' . $row['uid'];
+			$row['applied_taxes'][0]['applied_money'] = $money( $tax );
+		}
+		if ( ! $is_fee && ! empty( $order['discounts'] ) ) {
+			$row['applied_discounts'] = array( array( 'uid' => 'generated-discount', 'discount_uid' => 'db-discount', 'applied_money' => $money( $discount ) ) );
+		}
+	}
+	unset( $row );
+	foreach ( array( 'tax' => 'total_tax_money', 'discount' => 'total_discount_money', 'total' => 'total_money' ) as $key => $field ) {
+		$order[ $field ] = $money( $projection['amounts'][ $key ] );
+	}
+	foreach ( array( 'taxes' => 'tax', 'discounts' => 'discount' ) as $field => $key ) {
+		if ( ! empty( $order[ $field ] ) ) {
+			$order[ $field ][0]['applied_money'] = $money( $projection['amounts'][ $key ] );
+		}
+	}
+	return array( 'order' => $order );
+}
+
+db_test( 'Native PICKUP v2 preserves the website promise and guards paid lifecycle facts', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture( true, false, false );
+	$payload['order'] = array_merge( $payload['order'], array( 'order_type' => 'pickup', 'customer_name' => 'Synthetic Buyer',
+		'customer_phone' => '(0400) 000-000', 'pickup_mode' => 'asap', 'pickup_ready_from_utc' => '2026-10-17 03:45:00',
+		'square_orders_protocol' => 'square-orders-v2-pickup', 'square_pickup_prep_minutes' => 25, 'square_api_version' => '2025-01-23' ) );
+	$old = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	$legacy_payload = $payload; unset( $legacy_payload['order']['square_orders_protocol'], $legacy_payload['order']['square_pickup_prep_minutes'], $legacy_payload['order']['square_api_version'] );
+	assert_same( wp_json_encode( DoughBoss_Square_Orders::project( $legacy_payload, $binding, 37 ) ), wp_json_encode( $old ), 'v1 projection remains byte-identical with protocol facts absent' );
+	assert_false( isset( $old['order']['fulfillments'] ), 'v1 still adds no native fulfillment even with new snapshot fields' );
+	foreach ( array( 'asap', 'scheduled' ) as $mode ) {
+		$payload['order']['pickup_mode'] = $mode;
+		$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37, 'square-orders-v2-pickup' );
+		assert_false( is_wp_error( $projection ), 'both website modes project scheduled provider pickup' );
+		if ( is_wp_error( $projection ) ) { continue; }
+		$details = $projection['order']['fulfillments'][0]['pickup_details'];
+		assert_same( 'SCHEDULED', $details['schedule_type'], 'Square does not invent a later ASAP promise' );
+		assert_same( '2026-10-17T03:45:00Z', $details['pickup_at'], 'exact saved UTC promise' );
+		assert_same( 'PT25M', $details['prep_time_duration'], 'preparation comes from immutable snapshot' );
+		assert_same( array( 'display_name' => 'Synthetic Buyer', 'phone_number' => '0400000000' ), $details['recipient'], 'snapshot phone has deterministic formatting only' );
+		$response = db_square_orders_response_fixture( $projection );
+		assert_false( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $response, $projection ) ), 'exact new native create response validates' );
+		$payment = array( 'id' => 'sqpayPICKUPTEST0001', 'status' => 'COMPLETED', 'order_id' => $response['order']['id'],
+			'location_id' => $binding['square_location_id'], 'reference_id' => 'db-attempt-37', 'amount_money' => array( 'amount' => 2200, 'currency' => 'AUD' ) );
+		foreach ( array( 'CARD', 'SQUARE_GIFT_CARD' ) as $kind ) {
+			$response['order']['tenders'] = array( array( 'payment_id' => $payment['id'], 'type' => $kind, 'amount_money' => $payment['amount_money'] ) );
+			foreach ( array( 'PROPOSED', 'RESERVED', 'PREPARED', 'COMPLETED' ) as $state ) {
+				$response['order']['fulfillments'][0]['state'] = $state;
+				$response['order']['fulfillments'][0]['pickup_details']['placed_at'] = '2026-10-17T03:20:00.000Z';
+				assert_false( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $response, $projection, $payment, $payment['order_id'], $kind ) ), 'paid card/gift allows documented successful lifecycle ' . $state );
+			}
+		}
+		foreach ( array( 'CANCELED', 'FAILED', 'UNKNOWN' ) as $state ) {
+			$bad = $response; $bad['order']['fulfillments'][0]['state'] = $state;
+			assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $payment['order_id'], 'SQUARE_GIFT_CARD' ) ), 'failed/canceled/unknown fulfillment is paid and held' );
+		}
+		foreach ( array( 'schedule_type' => 'ASAP', 'pickup_at' => '2026-10-17T03:50:00Z', 'prep_time_duration' => 'PT30M', 'recipient' => array( 'display_name' => 'Different Buyer' ) ) as $key => $value ) {
+			$bad = $response; $bad['order']['fulfillments'][0]['pickup_details'][ $key ] = $value;
+			assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $payment['order_id'], 'SQUARE_GIFT_CARD' ) ), 'immutable ' . $key . ' drift cannot release payment' );
+		}
+		foreach ( array( array(), array( $response['order']['fulfillments'][0], $response['order']['fulfillments'][0] ) ) as $rows ) {
+			$bad = $response; $bad['order']['fulfillments'] = $rows;
+			assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $payment['order_id'], 'SQUARE_GIFT_CARD' ) ), 'missing or additional fulfillment is held' );
+		}
+	}
+} );
+
+db_test( 'Native PICKUP v2 rejects malformed snapshot facts and unknown protocols', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture( true, false, false );
+	$payload['order'] = array_merge( $payload['order'], array( 'order_type' => 'pickup', 'customer_name' => 'Synthetic Buyer',
+		'customer_phone' => '', 'pickup_mode' => 'scheduled', 'pickup_ready_from_utc' => '2026-10-17 03:45:00',
+		'square_orders_protocol' => 'square-orders-v2-pickup', 'square_pickup_prep_minutes' => 0, 'square_api_version' => '2025-01-23' ) );
+	$zero = DoughBoss_Square_Orders::project( $payload, $binding, 37, 'square-orders-v2-pickup' );
+	assert_same( 'PT0M', $zero['order']['fulfillments'][0]['pickup_details']['prep_time_duration'], 'zero prep is explicit and valid' );
+	foreach ( array( 'pickup_ready_from_utc' => array( '2026-02-30 03:45:00', '2026-10-17T03:45:00Z', '2026-10-17 03:45:00+11:00', 'tomorrow', 123, null ),
+		'square_pickup_prep_minutes' => array( -1, 1441, '25', 2.5, null ), 'customer_name' => array( '', array(), str_repeat( 'x', 256 ) ),
+		'customer_phone' => array( 123, array(), 'not a phone', '+123456789012345678', ' ' ), 'pickup_mode' => array( 'later', null ) ) as $key => $values ) {
+		foreach ( $values as $value ) {
+			$bad = $payload; $bad['order'][ $key ] = $value;
+			assert_true( is_wp_error( DoughBoss_Square_Orders::project( $bad, $binding, 37, 'square-orders-v2-pickup' ) ), 'malformed ' . $key . ' fails closed' );
+		}
+	}
+	assert_true( is_wp_error( DoughBoss_Square_Orders::project( $payload, $binding, 37, 'unknown-v3' ) ), 'unknown protocol cannot become v1' );
+	$protocol = new ReflectionMethod( 'DoughBoss_Square', 'orders_protocol' ); $protocol->setAccessible( true );
+	foreach ( array( 'square-orders-v1' => 1, 'square-orders-v2-pickup' => 2, 'unknown-v3' => -1 ) as $name => $expected ) {
+		assert_same( $expected, $protocol->invoke( null, array( 'safe_metadata_json' => json_encode( array( 'orders_protocol' => $name, 'orders_snapshot_hash' => str_repeat( 'a', 64 ), 'square_api_version' => '2025-01-23' ) ) ) ), 'strict protocol classifier ' . $name );
+	}
+	assert_same( 0, $protocol->invoke( null, array() ), 'protocol-absent historical attempts remain payment-only' );
+	assert_same( -1, $protocol->invoke( null, array( 'safe_metadata_json' => json_encode( array( 'orders_protocol' => 'square-orders-v2-pickup', 'orders_snapshot_hash' => str_repeat( 'a', 64 ) ) ) ) ), 'v2 missing saved API version cannot authorize anything' );
+	$payload['order']['customer_phone'] = '+12345678901234567';
+	assert_true( is_wp_error( DoughBoss_Square_Orders::project( $payload, $binding, 37, 'square-orders-v2-pickup' ) ), '2025 schema phone limit is 17 characters' );
+	$payload['order']['square_api_version'] = '2026-09-16';
+	assert_false( is_wp_error( DoughBoss_Square_Orders::project( $payload, $binding, 37, 'square-orders-v2-pickup' ) ), '2026 schema permits 18-character phone' );
+	$payload['order']['square_api_version'] = '2030-01-01';
+	assert_true( is_wp_error( DoughBoss_Square_Orders::project( $payload, $binding, 37, 'square-orders-v2-pickup' ) ), 'unproven API version fails closed' );
+} );
+
+db_test( 'Native v2 payment linkage and approved attestation retain the exact immutable tuple', function () {
+	$tuple_method = new ReflectionMethod( 'DoughBoss_Square', 'approved_release_tuple' ); $tuple_method->setAccessible( true );
+	$link = new ReflectionMethod( 'DoughBoss_Square', 'payment_order_matches' ); $link->setAccessible( true );
+	$attempt = array_fill_keys( array( 'id', 'attempt_key', 'checkout_key', 'provider', 'purpose', 'context', 'local_reference', 'location_id', 'table_id', 'qr_code_id', 'amount_minor', 'currency', 'provider_reference', 'provider_order_reference', 'provider_status', 'status', 'safe_metadata_json', 'verified_at' ), '' );
+	$attempt = array_merge( $attempt, array( 'id' => 37, 'provider' => 'square', 'purpose' => 'order', 'context' => 'approved_preorder', 'status' => 'succeeded',
+		'provider_status' => 'COMPLETED', 'verified_at' => '2026-10-17 03:20:00', 'provider_reference' => 'sqpayPICKUPTEST0001', 'provider_order_reference' => 'squareORDEREXAMPLE00000001',
+		'safe_metadata_json' => json_encode( array( 'orders_protocol' => 'square-orders-v2-pickup', 'orders_snapshot_hash' => str_repeat( 'a', 64 ), 'square_api_version' => '2025-01-23' ) ) ) );
+	assert_true( $link->invoke( null, array( 'order_id' => $attempt['provider_order_reference'] ), $attempt ), 'native v2 payment binds exact provider Order' );
+	assert_false( $link->invoke( null, array( 'order_id' => 'squareORDERDIFFERENT00001' ), $attempt ), 'native v2 cannot inherit a different Order' );
+	$tuple = $tuple_method->invoke( null, $attempt );
+	assert_true( is_array( $tuple ), 'native v2 reaches existing approved tuple validation' );
+	$cache = new ReflectionProperty( 'DoughBoss_Square', 'approved_release_attestations' ); $cache->setAccessible( true );
+	$original = $cache->getValue();
+	try {
+		// Synthetic cache injection tests consumption only, not provider retrieval/minting.
+		$cache->setValue( null, array( 37 => $tuple ) );
+		assert_true( DoughBoss_Square::consume_approved_release_attestation( $attempt ), 'exact v2 tuple consumes once' );
+		assert_false( DoughBoss_Square::consume_approved_release_attestation( $attempt ), 'attestation replay cannot release again' );
+		foreach ( array( 'currency' => 'USD', 'verified_at' => '2026-10-17 03:21:00', 'provider_order_reference' => 'squareORDERDIFFERENT00001' ) as $key => $value ) {
+			$cache->setValue( null, array( 37 => $tuple ) ); $bad = $attempt; $bad[ $key ] = $value;
+			assert_false( DoughBoss_Square::consume_approved_release_attestation( $bad ), 'changed approval tuple is held' );
+		}
+	} finally { $cache->setValue( null, $original ); }
+} );
+
+db_test( 'Native v2 transport version is retained and settings drift is held', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	try {
+		doughboss_test_set_settings( db_square_settings( array( 'square_test_location_map' => array( 'revesby' => 'LOCATION_R_TEST' ) ) ) );
+		$binding = array( 'shop_slug' => 'revesby', 'square_location_id' => 'LOCATION_R_TEST', 'square_mode' => 'test', 'square_api_version' => '2025-01-23' );
+		$method = new ReflectionMethod( 'DoughBoss_Square', 'mapped_binding_current' ); $method->setAccessible( true );
+		assert_true( $method->invoke( null, $binding ), 'retained supported version and current shop binding agree' );
+		doughboss_test_set_settings( db_square_settings( array( 'square_test_location_map' => array( 'revesby' => 'LOCATION_R_TEST' ), 'square_api_version' => '2026-09-16' ) ) );
+		assert_false( $method->invoke( null, $binding ), 'same attempt cannot silently change wire API version after settings drift' );
+		$binding['square_api_version'] = '2030-01-01';
+		assert_false( $method->invoke( null, $binding ), 'unknown provider schema is not accepted' );
+	} finally { doughboss_test_set_settings( $original ); }
+} );
+
+db_test( 'Square Orders project historical itemization without charging modifiers twice', function () {
+	foreach ( array( true, false ) as $inclusive ) {
+		foreach ( array( true, false ) as $discount ) {
+			foreach ( array( true, false ) as $delivery ) {
+				list( $payload, $binding ) = db_square_orders_projection_fixture( $inclusive, $discount, $delivery );
+				$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+				assert_false( is_wp_error( $projection ), 'inclusive/exclusive discount/delivery combinations project' );
+				if ( is_wp_error( $projection ) ) { continue; }
+				assert_same( 1100, $projection['order']['line_items'][0]['base_price_money']['amount'], 'final unit price includes sujuk once' );
+				assert_same( "Size: Large\nAdd sujuk\nNo onion", $projection['order']['line_items'][0]['note'], 'all saved choices are retained without repricing' );
+				assert_same( 'db-attempt-37', $projection['order']['reference_id'], 'separate Order is correlated to original attempt' );
+				assert_same( 'OPEN', $projection['order']['state'], 'the planned Order is payable, never a DRAFT' );
+				assert_false( isset( $projection['order']['fulfillments'], $projection['order']['customer_id'] ), 'projection makes no fulfillment/customer promise' );
+				$response = db_square_orders_response_fixture( $projection );
+				assert_same( array( 'id' => 'squareORDEREXAMPLE00000001', 'version' => 1 ), DoughBoss_Square_Orders::validate_unpaid_response( $response, $projection ), 'exact synthetic item/adjustment rollups validate' );
+			}
+		}
+	}
+	list( $payload, $binding ) = db_square_orders_projection_fixture( true, false, false );
+	$payload['order']['accounting_basis']['tax_rate'] = 0;
+	$payload['order']['tax'] = 0;
+	$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	assert_false( isset( $projection['order']['taxes'], $projection['order']['discounts'] ), 'zero-rate/no-discount omit synthetic adjustments' );
+	assert_false( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( db_square_orders_response_fixture( $projection ), $projection ) ), 'zero adjustment response is supported' );
+} );
+
+db_test( 'Square paid Order verification requires exact completed Payment and one matching tender', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture();
+	$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	$paid = db_square_orders_response_fixture( $projection );
+	$id = $paid['order']['id'];
+	$payment = array( 'id' => 'sqpayORDERSVERIFIED00001', 'status' => 'COMPLETED',
+		'order_id' => $id, 'location_id' => $binding['square_location_id'], 'reference_id' => 'db-attempt-37',
+		'amount_money' => array( 'amount' => $projection['amounts']['total'], 'currency' => 'AUD' ) );
+	$paid['order']['state'] = 'COMPLETED';
+	$paid['order']['tenders'] = array( array( 'payment_id' => $payment['id'], 'type' => 'CARD', 'amount_money' => $payment['amount_money'] ) );
+	$paid['order']['net_amount_due_money'] = array( 'amount' => 0, 'currency' => 'AUD' );
+	foreach ( array( 'OPEN', 'COMPLETED' ) as $state ) {
+		$good = $paid; $good['order']['state'] = $state;
+		assert_same( array( 'id' => $id, 'version' => 1 ), DoughBoss_Square_Orders::validate_paid_response( $good, $projection, $payment, $id ), 'paid economics validate without using Order state as payment authority' );
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $good, $projection ) ), 'a paid Order cannot satisfy the unpaid dispatch check' );
+	}
+	foreach ( array( 'id', 'status', 'order_id', 'location_id', 'reference_id', 'amount_money' ) as $field ) {
+		$bad = $payment; unset( $bad[ $field ] );
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $paid, $projection, $bad, $id ) ), 'missing Payment ' . $field . ' cannot confirm a linked Order' );
+	}
+	foreach ( array( 'APPROVED', 'PENDING', 'FAILED', 'CANCELED', 'completed', '', null ) as $status ) {
+		$bad = $payment; $bad['status'] = $status;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $paid, $projection, $bad, $id ) ), 'anything except exact provider COMPLETED denies paid verification' );
+	}
+	foreach ( array( 'id' => 'sqpayANOTHERPAYMENT0001', 'order_id' => 'squareANOTHERORDER00001', 'location_id' => 'OTHER_LOCATION', 'reference_id' => 'db-attempt-38' ) as $field => $value ) {
+		$bad = $payment; $bad[ $field ] = $value;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $paid, $projection, $bad, $id ) ), 'changed Payment identity/binding ' . $field . ' denies paid verification' );
+	}
+	$invalid = array();
+	foreach ( array( 'DRAFT', 'CANCELED', 'completed', null ) as $state ) { $bad = $paid; $bad['order']['state'] = $state; $invalid[] = $bad; }
+	foreach ( array( null, array(), array( $paid['order']['tenders'][0], $paid['order']['tenders'][0] ) ) as $tenders ) { $bad = $paid; $bad['order']['tenders'] = $tenders; $invalid[] = $bad; }
+	foreach ( array( 'payment_id' => 'sqpayOTHER00000001', 'type' => 'CASH', 'amount_money' => array( 'amount' => $projection['amounts']['total'] - 1, 'currency' => 'AUD' ) ) as $field => $value ) {
+		$bad = $paid; $bad['order']['tenders'][0][ $field ] = $value; $invalid[] = $bad;
+	}
+	$bad = $paid; $bad['order']['net_amount_due_money']['amount'] = 1; $invalid[] = $bad;
+	$bad = $paid; $bad['order']['tenders'][0]['tip_money'] = array( 'amount' => 1, 'currency' => 'AUD' ); $invalid[] = $bad;
+	$bad = $paid; $bad['order']['line_items'][0]['name'] = 'Changed after payment'; $invalid[] = $bad;
+	$bad = $paid; $bad['order']['line_items'][0]['note'] = 'Modifiers changed after payment'; $invalid[] = $bad;
+	$bad = $paid; $bad['order']['discounts'][0]['amount_money']['amount'] -= 1; $invalid[] = $bad;
+	$bad = $paid; $bad['order']['taxes'][0]['percentage'] = '11'; $invalid[] = $bad;
+	$bad = $paid; $bad['order']['fulfillments'] = array( array( 'type' => 'PICKUP' ) ); $invalid[] = $bad;
+	$bad = $paid; $bad['order']['refunds'] = array( array( 'amount_money' => $payment['amount_money'] ) ); $invalid[] = $bad;
+	foreach ( $invalid as $index => $bad ) {
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $id ) ), 'post-payment drift ' . $index . ' remains held even with matching final total' );
+	}
+	foreach ( array( 'amount' => '2330', 'currency' => 'USD' ) as $field => $value ) {
+		$bad = $payment; $bad['amount_money'][ $field ] = $value;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $paid, $projection, $bad, $id ) ), 'malformed Payment money cannot confirm linked Order' );
+	}
+	assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $paid, $projection, $payment, 'squareWRONGBINDING0001' ) ), 'different immutable bound Order identity denies verification' );
+} );
+
+db_test( 'Square Orders deny unknown or inconsistent immutable checkout facts', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture();
+	$invalid = array();
+	foreach ( array( null, array(), array( 'version' => 2 ) ) as $basis ) {
+		$bad = $payload; $bad['order']['accounting_basis'] = $basis; $invalid[] = $bad;
+	}
+	$bad = $payload; unset( $bad['order']['accounting_basis'] ); $invalid[] = $bad;
+	foreach ( array( true, '1e1', '1.001', 0.0000000001, INF, NAN, -1, '100000000.00', array() ) as $price ) {
+		$bad = $payload; $bad['lines'][0]['unit_price'] = $price; $invalid[] = $bad;
+	}
+	foreach ( array( 0, -1, '02', '2.0', 2.1, true, 2147483648, array() ) as $quantity ) {
+		$bad = $payload; $bad['lines'][0]['quantity'] = $quantity; $invalid[] = $bad;
+	}
+	foreach ( array( 'subtotal' => '23.00', 'discount' => '23.00', 'total' => '23.31', 'tax' => '999.00', 'currency' => 'aud' ) as $key => $value ) {
+		$bad = $payload; $bad['order'][ $key ] = $value; $invalid[] = $bad;
+	}
+	$bad = $payload; $bad['lines'][0]['line_total'] = '22.01'; $invalid[] = $bad;
+	$bad = $payload; $bad['lines'][0]['toppings'][0]['label'] = array(); $invalid[] = $bad;
+	$bad = $payload; $bad['lines'][0]['toppings'] = '[malformed]'; $invalid[] = $bad;
+	$bad = $payload; $bad['lines'][0]['name'] = "\xff"; $invalid[] = $bad;
+	$bad = $payload; $bad['lines'][0]['size'] = str_repeat( 'x', 81 ); $invalid[] = $bad;
+	$bad = $payload; $bad['lines'][0]['toppings'] = array_fill( 0, 5, array( 'label' => str_repeat( 'x', 500 ) ) ); $invalid[] = $bad;
+	$bad = $payload; $bad['order']['accounting_basis']['tax_rate'] = 0.000000001; $invalid[] = $bad;
+	foreach ( $invalid as $index => $bad ) {
+		assert_true( is_wp_error( DoughBoss_Square_Orders::project( $bad, $binding, 37 ) ), 'invalid persisted input ' . $index . ' cannot be itemized' );
+	}
+	foreach ( array( 'shop_slug' => 'unannounced', 'square_location_id' => '<wrong>', 'square_mode' => 'production' ) as $key => $value ) {
+		$bad_binding = $binding; $bad_binding[ $key ] = $value;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::project( $payload, $bad_binding, 37 ) ), 'invalid/private shop binding is refused' );
+	}
+	assert_true( is_wp_error( DoughBoss_Square_Orders::project( $payload, $binding, '37' ) ), 'attempt identity is not coerced' );
+} );
+
+db_test( 'Square Orders equal final totals cannot conceal altered provider facts', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture();
+	$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	$good = db_square_orders_response_fixture( $projection );
+	$invalid = array();
+	foreach ( array( 'id' => array(), 'version' => '1', 'location_id' => 'OTHER_LOCATION', 'reference_id' => 'db-attempt-38', 'state' => 'COMPLETED' ) as $key => $value ) {
+		$bad = $good; $bad['order'][ $key ] = $value; $invalid[] = $bad;
+	}
+	foreach ( array( 'fulfillments', 'tenders', 'refunds', 'returns', 'rewards', 'service_charges' ) as $key ) {
+		$bad = $good; $bad['order'][ $key ] = array( array( 'unexpected' => true ) ); $invalid[] = $bad;
+		$bad = $good; $bad['order'][ $key ] = null; $invalid[] = $bad;
+	}
+	foreach ( array( 'uid' => 'other-line', 'quantity' => '3', 'name' => 'Different pizza', 'note' => 'No choices', 'modifiers' => array( array( 'name' => 'Double-charged sujuk' ) ), 'catalog_object_id' => 'MUTABLE_CATALOG', 'item_type' => 'GIFT_CARD' ) as $key => $value ) {
+		$bad = $good; $bad['order']['line_items'][0][ $key ] = $value; $invalid[] = $bad;
+	}
+	$bad = $good; $bad['order']['line_items'][1]['uid'] = 'db-line-1'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][] = $bad['order']['line_items'][0]; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][0]['base_price_money']['amount'] = 1200; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][0]['base_price_money']['currency'] = 'USD'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][0]['applied_taxes'][0]['tax_uid'] = 'other-tax'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][0]['applied_discounts'][0]['applied_money']['amount'] = 199; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][1]['total_discount_money']['amount'] = 1; $invalid[] = $bad;
+	$bad = $good; $bad['order']['taxes'][0]['percentage'] = '11'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['taxes'][0]['scope'] = 'ORDER'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['discounts'][0]['amount_money']['amount'] = 201; $invalid[] = $bad;
+	$bad = $good; $bad['order']['discounts'][0]['pricing_rule_id'] = 'RULE'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['discounts'][0]['reward_ids'] = array( 'REWARD' ); $invalid[] = $bad;
+	$bad = $good; $bad['order']['taxes'][0]['auto_applied'] = true; $invalid[] = $bad;
+	$bad = $good; $bad['order']['total_tax_money']['amount'] = 213; $invalid[] = $bad;
+	$bad = $good; $bad['order']['total_money']['amount'] = '2330'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['total_money']['amount'] = 2330.0; $invalid[] = $bad;
+	$bad = $good; $bad['order']['total_tip_money'] = array( 'amount' => 1, 'currency' => 'AUD' ); $invalid[] = $bad;
+	$bad = $good; $bad['order']['pricing_options']['auto_apply_taxes'] = true; $invalid[] = $bad;
+	$bad = $good; $bad['order']['pricing_options']['auto_apply_rewards'] = false; $invalid[] = $bad;
+	$bad = $good; $bad['order']['taxes'][0]['effective_percentage'] = '11'; $invalid[] = $bad;
+	$bad = $good; unset( $bad['order']['line_items'][1]['pricing_blocklists'] ); $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][1]['pricing_blocklists']['blocked_discounts'][0]['discount_uid'] = 'other-discount'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][1]['pricing_blocklists']['blocked_discounts'][0]['uid'] = 'other-block'; $invalid[] = $bad;
+	$bad = $good; $bad['order']['line_items'][0]['pricing_blocklists'] = array( 'blocked_taxes' => array( array( 'tax_uid' => 'db-tax' ) ) ); $invalid[] = $bad;
+	$bad = $good; $bad['order']['version'] = 2147483648; $invalid[] = $bad;
+	$bad = $good; $bad['order']['rounding_adjustment'] = null; $invalid[] = $bad;
+	$bad = $good; $bad['errors'] = array( array( 'code' => 'ERROR' ) ); $invalid[] = $bad;
+	foreach ( $invalid as $index => $bad ) {
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $bad, $projection ) ), 'provider mismatch ' . $index . ' fails even when order total is unchanged' );
+	}
+	$good['order']['line_items'] = array_reverse( $good['order']['line_items'] );
+	unset( $good['order']['pricing_options'] );
+	assert_false( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $good, $projection ) ), 'provider line order/default-false omission do not alter UID-bound facts' );
+} );
+
+db_test( 'Square Orders missing zero-value adjustment evidence is not integer zero', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture( true, false, false );
+	foreach ( array( 'subtotal', 'discount', 'tax', 'delivery_fee', 'total' ) as $field ) { $payload['order'][ $field ] = 0; }
+	$payload['lines'][0]['unit_price'] = 0;
+	$payload['lines'][0]['line_total'] = 0;
+	$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	$good = db_square_orders_response_fixture( $projection );
+	assert_false( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $good, $projection ) ), 'zero amounts still require explicit valid applied money' );
+	foreach ( array( null, array( 'amount' => null, 'currency' => 'AUD' ), array( 'amount' => '0', 'currency' => 'AUD' ) ) as $value ) {
+		$bad = $good; $bad['order']['line_items'][0]['applied_taxes'][0]['applied_money'] = $value;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $bad, $projection ) ), 'malformed or absent money cannot compare as strict integer zero' );
+	}
+	$bad = $good; unset( $bad['order']['line_items'][0]['applied_taxes'][0]['applied_money'] );
+	assert_true( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $bad, $projection ) ), 'missing applied money fails closed, including zero' );
+	foreach ( array( array(), array( 'order' => array(), 'amounts' => array(), 'currency' => 'AUD', 'tax_inclusive' => true ) ) as $invalid_projection ) {
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_unpaid_response( $good, $invalid_projection ) ), 'incomplete internal projection returns an error rather than partial verification' );
+	}
+} );
+
+db_test( 'Order accounting basis codec preserves only canonical historical facts', function () {
+	$basis = array(
+		'version'          => 1,
+		'tax_inclusive'    => true,
+		'tax_rate'         => 10,
+		'discount_policy'  => 'goods_before_tax',
+		'delivery_taxable' => true,
+	);
+	$normalized = array(
+		'version'          => 1,
+		'tax_inclusive'    => true,
+		'tax_rate'         => 10.0,
+		'discount_policy'  => 'goods_before_tax',
+		'delivery_taxable' => true,
+	);
+
+	assert_same( $normalized, DoughBoss_Order::normalize_accounting_basis( $basis ), 'the exact five accounting fields normalise in literal order' );
+	assert_same( false, DoughBoss_Order::normalize_accounting_basis( array_merge( $basis, array( 'tax_inclusive' => false, 'delivery_taxable' => false ) ) )['tax_inclusive'], 'exclusive policy accepts matching boolean tax and delivery flags' );
+	assert_same( $normalized, DoughBoss_Order::normalize_accounting_basis( array_merge( $basis, array( 'tax_rate' => 10.0 ) ) ), 'integer and float rates normalise identically' );
+	assert_same( 0.0, DoughBoss_Order::normalize_accounting_basis( array_merge( $basis, array( 'tax_rate' => -0.0 ) ) )['tax_rate'], 'negative zero normalises to the same zero rate' );
+	assert_same( 7.125, DoughBoss_Order::normalize_accounting_basis( array_merge( $basis, array( 'tax_rate' => 7.125 ) ) )['tax_rate'], 'fractional rates retain their exact supplied precision' );
+	assert_same( 999999.9999, DoughBoss_Order::normalize_accounting_basis( array_merge( $basis, array( 'tax_rate' => 999999.9999 ) ) )['tax_rate'], 'the codec imposes no arbitrary maximum tax rate' );
+
+	$invalid_bases = array(
+		array(),
+		array_diff_key( $basis, array( 'delivery_taxable' => true ) ),
+		array_merge( $basis, array( 'extra' => true ) ),
+		array_merge( $basis, array( 'version' => 2 ) ),
+		array_merge( $basis, array( 'version' => '1' ) ),
+		array_merge( $basis, array( 'version' => true ) ),
+		array_merge( $basis, array( 'tax_inclusive' => 'true' ) ),
+		array_merge( $basis, array( 'delivery_taxable' => false ) ),
+		array_merge( $basis, array( 'discount_policy' => 'delivery_after_tax' ) ),
+		array_merge( $basis, array( 'tax_rate' => '10' ) ),
+		array_merge( $basis, array( 'tax_rate' => true ) ),
+		array_merge( $basis, array( 'tax_rate' => -0.01 ) ),
+		array_merge( $basis, array( 'tax_rate' => INF ) ),
+		array_merge( $basis, array( 'tax_rate' => NAN ) ),
+	);
+	foreach ( $invalid_bases as $invalid_basis ) {
+		assert_true( is_wp_error( DoughBoss_Order::normalize_accounting_basis( $invalid_basis ) ), 'missing, extra, version, policy, mode, and non-finite rate facts fail closed' );
+	}
+
+	$encoded = DoughBoss_Order::encode_accounting_basis( $basis );
+	assert_same( '{"version":1,"tax_inclusive":true,"tax_rate":10,"discount_policy":"goods_before_tax","delivery_taxable":true}', $encoded, 'canonical encoding preserves the frozen literal key order' );
+	assert_same( $encoded, DoughBoss_Order::encode_accounting_basis( array_merge( $basis, array( 'tax_rate' => 10.0 ) ) ), 'integer and float rate encodings are canonical equivalents' );
+	assert_same( $normalized, DoughBoss_Order::decode_accounting_basis( $encoded ), 'canonical stored JSON decodes to the normalised object' );
+	assert_same( null, DoughBoss_Order::decode_accounting_basis( null ), 'only SQL NULL stored basis remains legacy unknown' );
+
+	$noncanonical_stored = array(
+		'',
+		' ',
+		'null',
+		'true',
+		'10',
+		'"basis"',
+		'[]',
+		'{}',
+		'{',
+		'{"version":1,"tax_inclusive":true,"tax_rate":10,"tax_rate":10,"discount_policy":"goods_before_tax","delivery_taxable":true}',
+		' ' . $encoded,
+		'{"tax_rate":10,"version":1,"tax_inclusive":true,"discount_policy":"goods_before_tax","delivery_taxable":true}',
+	);
+	foreach ( $noncanonical_stored as $stored ) {
+		assert_true( is_wp_error( DoughBoss_Order::decode_accounting_basis( $stored ) ), 'non-NULL scalar, malformed, duplicate, whitespace, and noncanonical stored JSON fails closed' );
+	}
+
+	assert_same( null, DoughBoss_Order::accounting_basis_from_payload( array() ), 'a payload with no basis key remains unknown' );
+	assert_true( is_wp_error( DoughBoss_Order::accounting_basis_from_payload( array( 'accounting_basis' => null ) ) ), 'an explicit NULL transport basis is invalid rather than legacy unknown' );
+	assert_same( $normalized, DoughBoss_Order::accounting_basis_from_payload( array( 'accounting_basis' => $basis ) ), 'a present valid transport basis normalises' );
+	assert_same( $normalized, DoughBoss_Order::accounting_basis_from_order( (object) array( 'accounting_basis_json' => $encoded ) ), 'a canonical persisted order basis is available for snapshots' );
+	assert_same( null, DoughBoss_Order::accounting_basis_from_order( (object) array() ), 'an absent legacy order field remains unknown' );
+	assert_true( is_wp_error( DoughBoss_Order::accounting_basis_from_order( (object) array( 'accounting_basis_json' => '{}' ) ) ), 'a malformed non-NULL persisted basis is never legacy unknown' );
+
+	$known_order   = (object) array( 'accounting_basis_json' => $encoded );
+	$legacy_order  = (object) array( 'accounting_basis_json' => null );
+	$malformed_order = (object) array( 'accounting_basis_json' => '{}' );
+	assert_true( DoughBoss_Order::accounting_basis_matches_payload( $known_order, array( 'accounting_basis' => $basis ) ), 'known canonical order and payload basis match' );
+	assert_false( DoughBoss_Order::accounting_basis_matches_payload( $known_order, array() ), 'known order basis cannot match an unknown payload' );
+	assert_true( DoughBoss_Order::accounting_basis_matches_payload( $legacy_order, array() ), 'legacy unknown order and absent payload basis match' );
+	assert_false( DoughBoss_Order::accounting_basis_matches_payload( $legacy_order, array( 'accounting_basis' => $basis ) ), 'legacy unknown order cannot match a newly supplied basis' );
+	assert_false( DoughBoss_Order::accounting_basis_matches_payload( $known_order, array( 'accounting_basis' => null ) ), 'explicit NULL payload basis holds rather than matching' );
+	assert_false( DoughBoss_Order::accounting_basis_matches_payload( $malformed_order, array( 'accounting_basis' => $basis ) ), 'malformed persisted basis holds rather than matching' );
+} );
+
+// Synthetic dashboard figures must never masquerade as connected provider data.
+$dashboard_original_settings = get_option( 'doughboss_settings', array() );
+doughboss_test_reset_options();
+$dashboard_status = DoughBoss_Square_Dashboard::view();
+assert_same( 'not_connected', $dashboard_status['data_state'], 'dashboard starts disconnected' );
+assert_same( 'not_configured', $dashboard_status['connection']['state'], 'missing credentials are explicit' );
+assert_false( isset( $dashboard_status['summary'] ), 'disconnected view has no invented revenue' );
+assert_false( $dashboard_status['staff']['attendance_available'], 'Square attendance is not simulated as connected' );
+assert_same( 'private_unmapped', $dashboard_status['planned_location']['state'], 'new location stays private and unmapped' );
+assert_same( 3, count( $dashboard_status['locations'] ), 'only the three confirmed shops enter selectors' );
+$dashboard_all = DoughBoss_Square_Dashboard::view( 'demo' );
+assert_same( 'synthetic', $dashboard_all['source'], 'demo identifies synthetic source' );
+assert_same( 'demo', $dashboard_all['data_state'], 'demo state is explicit' );
+assert_same( 12, count( $dashboard_all['orders'] ), 'demo includes four fictional orders per confirmed shop' );
+$dashboard_sum = array( 'gross_sales_minor' => 0, 'refunds_minor' => 0, 'net_sales_minor' => 0, 'orders' => 0 );
+foreach ( array( 'revesby', 'bankstown', 'roselands' ) as $dashboard_shop ) {
+	$dashboard_filtered = DoughBoss_Square_Dashboard::view( 'demo', $dashboard_shop );
+	assert_same( 1, count( $dashboard_filtered['location_summaries'] ), 'location selection isolates its summary' );
+	assert_same( 4, count( $dashboard_filtered['orders'] ), 'location selection isolates its fictional orders' );
+	foreach ( $dashboard_filtered['orders'] as $dashboard_order ) {
+		assert_same( $dashboard_shop, $dashboard_order['location_id'], 'no cross-location order disclosure in selected view' );
+		$dashboard_line_total = 0;
+		foreach ( $dashboard_order['items'] as $dashboard_item ) {
+			$dashboard_line_total += $dashboard_item['quantity'] * $dashboard_item['unit_price_minor'];
+		}
+		assert_same( $dashboard_line_total, $dashboard_order['amount_minor'], 'order total equals integer-cents line totals' );
+	}
+	assert_same( 3, $dashboard_filtered['summary']['orders'], 'unpaid request is excluded from paid sales count' );
+	foreach ( $dashboard_sum as $dashboard_key => $dashboard_value ) {
+		$dashboard_sum[ $dashboard_key ] += $dashboard_filtered['summary'][ $dashboard_key ];
+	}
+}
+foreach ( $dashboard_sum as $dashboard_key => $dashboard_value ) {
+	assert_same( $dashboard_value, $dashboard_all['summary'][ $dashboard_key ], 'all-shops total is sum of each shop for ' . $dashboard_key );
+}
+assert_same( $dashboard_all['summary']['gross_sales_minor'], array_sum( array_column( $dashboard_all['sales_series'], 'gross_sales_minor' ) ), 'chart totals reconcile to gross sales' );
+assert_same( 1317, $dashboard_all['summary']['average_order_minor'], 'average order uses integer HALF_UP rounding' );
+foreach ( array( array( 'live', 'all' ), array( 'demo', 'planned' ), array( 'demo', '../revesby' ), array( array(), 'all' ), array( 'demo', array() ) ) as $dashboard_bad ) {
+	assert_true( is_wp_error( DoughBoss_Square_Dashboard::view( $dashboard_bad[0], $dashboard_bad[1] ) ), 'invalid source or location is denied, never inferred' );
+}
+assert_false( isset( $dashboard_all['access_token'] ), 'dashboard contract contains no token field' );
+doughboss_test_set_settings( $dashboard_original_settings );
+
+db_test( 'Square shop bindings are explicit, bounded and distinct', function () {
+	assert_same( array(), DoughBoss_Settings::defaults()['square_test_location_map'], 'sandbox bindings start empty' );
+	assert_same( array(), DoughBoss_Settings::defaults()['square_live_location_map'], 'production bindings start empty' );
+	foreach ( array( null, false, 42, 'LUNSCOPED' ) as $invalid ) {
+		assert_same( array(), DoughBoss_Settings::sanitize_square_location_map( $invalid ), 'malformed persisted map fails closed' );
+	}
+	$map = DoughBoss_Settings::sanitize_square_location_map( array(
+		'revesby' => ' LDEMO_REVESBY ', 'bankstown' => 'LDEMO_BANKSTOWN', 'roselands' => 'LDEMO_ROSELANDS',
+		'planned' => 'LPRIVATE', 'unknown' => 'LUNKNOWN',
+	) );
+	assert_same( array( 'revesby' => 'LDEMO_REVESBY', 'bankstown' => 'LDEMO_BANKSTOWN', 'roselands' => 'LDEMO_ROSELANDS' ), $map, 'only confirmed shops have explicit bindings' );
+	foreach ( array( '', 'abc', str_repeat( 'L', 65 ), "LVALID\nINVALID", '<script>', array( 'LARRAY' ), 12345 ) as $invalid ) {
+		assert_same( array(), DoughBoss_Settings::sanitize_square_location_map( array( 'revesby' => $invalid ) ), 'invalid provider ID cannot become a mapping' );
+	}
+	assert_same( array( 'roselands' => 'LUNIQUE' ), DoughBoss_Settings::sanitize_square_location_map( array(
+		'revesby' => 'LDUPLICATE', 'bankstown' => 'LDUPLICATE', 'roselands' => 'LUNIQUE',
+	) ), 'both ambiguous bindings are removed, not first-wins' );
+} );
+
+db_test( 'Square mapping status is environment-isolated and never connected evidence', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	try {
+		doughboss_test_set_settings( db_square_settings( array(
+			'square_test_location_map' => array( 'revesby' => 'LTEST_REVESBY', 'bankstown' => 'LTEST_BANKSTOWN' ),
+			'square_live_location_map' => array( 'roselands' => 'LLIVE_ROSELANDS' ),
+		) ) );
+		assert_same( 'LTEST_REVESBY', DoughBoss_Settings::square_shop_location_id( 'revesby' ), 'exact sandbox shop resolves' );
+		assert_same( '', DoughBoss_Settings::square_shop_location_id( 'roselands' ), 'live ID never fills a sandbox gap' );
+		foreach ( array( 'Revesby', 'revesby ', '../revesby', 'planned', 'unknown', 1, null, array() ) as $unknown ) {
+			assert_same( '', DoughBoss_Settings::square_shop_location_id( $unknown ), 'unknown or non-exact shop denied' );
+		}
+		$status = DoughBoss_Square_Dashboard::view();
+		assert_same( 'configured_unverified', $status['locations'][0]['state'], 'saved ID remains unverified' );
+		assert_same( 'unmapped', $status['locations'][2]['state'], 'missing shop never inherits legacy global ID' );
+		assert_same( 'not_connected', $status['data_state'], 'mapping does not attest a connection' );
+		assert_false( $status['connection']['provider_verified'], 'no provider verification is invented' );
+		assert_false( isset( $status['summary'] ), 'mapping never creates revenue' );
+		assert_false( isset( $status['locations'][0]['square_location_id'] ), 'dashboard does not disclose provider IDs' );
+		assert_same( 'private_unmapped', $status['planned_location']['state'], 'planned shop stays private' );
+		doughboss_test_set_settings( db_square_settings( array(
+			'square_mode' => 'live', 'square_live_location_map' => array( 'roselands' => 'LLIVE_ROSELANDS' ),
+			'square_test_location_map' => array( 'revesby' => 'LTEST_REVESBY' ),
+		) ) );
+		assert_same( '', DoughBoss_Settings::square_shop_location_id( 'revesby' ), 'sandbox ID cannot enter live map' );
+		assert_same( 'LLIVE_ROSELANDS', DoughBoss_Settings::square_shop_location_id( 'roselands' ), 'only explicit live binding resolves' );
+	} finally {
+		doughboss_test_set_settings( $original );
+	}
+} );
+
+db_test( 'Square v2 native shop binding is exact, active and map-scoped', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	$method   = new ReflectionMethod( 'DoughBoss_Square', 'shop_binding_from_location' );
+	$method->setAccessible( true );
+	try {
+		doughboss_test_set_settings( db_square_settings( array(
+			'square_test_location_id'  => 'LLEGACYGLOBAL',
+			'square_test_location_map' => array( 'revesby' => 'LTEST_REVESBY', 'bankstown' => 'LTEST_BANKSTOWN' ),
+		) ) );
+		$revesby = (object) array( 'id' => 7, 'slug' => 'revesby', 'is_active' => 1 );
+		assert_same(
+			array( 'shop_slug' => 'revesby', 'square_location_id' => 'LTEST_REVESBY', 'square_mode' => 'test' ),
+			$method->invoke( null, $revesby, 7 ),
+			'an active native shop resolves only its exact active-mode mapping'
+		);
+
+		foreach ( array(
+			(object) array( 'id' => 7, 'slug' => 'Revesby', 'is_active' => 1 ),
+			(object) array( 'id' => 7, 'slug' => 'revesby', 'is_active' => 0 ),
+			(object) array( 'id' => 7, 'slug' => 'planned', 'is_active' => 1 ),
+			(object) array( 'id' => 8, 'slug' => 'revesby', 'is_active' => 1 ),
+			null,
+		) as $invalid_location ) {
+			assert_same( 'doughboss_pay_shop_binding', $method->invoke( null, $invalid_location, 7 )->get_error_code(), 'inactive, unknown, mismatched or non-exact native shop fails closed' );
+		}
+
+		$roselands = (object) array( 'id' => 9, 'slug' => 'roselands', 'is_active' => 1 );
+		assert_same( 'doughboss_pay_shop_binding', $method->invoke( null, $roselands, 9 )->get_error_code(), 'a supported shop without an active-mode mapping never falls back to the global Square location' );
+	} finally {
+		doughboss_test_set_settings( $original );
+	}
+} );
+
+db_test( 'Square Gift Card selection and funding evidence are strict', function () {
+	assert_same( 'card', DoughBoss_Square::tender_kind( null ), 'omitted selection preserves card compatibility' );
+	assert_same( 'gift_card', DoughBoss_Square::tender_kind( 'gift_card' ), 'exact gift selection is supported' );
+	foreach ( array( '', 'GIFT_CARD', 'gift', 1, true, array(), new stdClass() ) as $value ) {
+		assert_true( is_wp_error( DoughBoss_Square::tender_kind( $value ) ), 'malformed selection cannot choose a tender' );
+	}
+	$method = new ReflectionMethod( 'DoughBoss_Square', 'payment_tender_matches' );
+	$method->setAccessible( true );
+	$attempt = array( 'amount_minor' => 1250, 'currency' => 'AUD', 'safe_metadata_json' => json_encode( array( 'square_tender_kind' => 'gift_card' ) ) );
+	$payment = array( 'source_type' => 'CARD', 'status' => 'COMPLETED',
+		'card_details' => array( 'status' => 'CAPTURED', 'card' => array( 'card_brand' => 'SQUARE_GIFT_CARD' ) ),
+		'amount_money' => array( 'amount' => 1250, 'currency' => 'AUD' ) );
+	assert_true( $method->invoke( null, $payment, $attempt ), 'exact full-value captured gift evidence is supported' );
+	foreach ( array( 'CARD', 'GIFT_CARD', 'CASH', null, array() ) as $type ) {
+		$bad = $payment; $bad['source_type'] = $type;
+		assert_same( 'CARD' === $type, $method->invoke( null, $bad, $attempt ), 'Square source type is CARD, not an invented gift enum' );
+	}
+	foreach ( array( 'VISA', 'SQUARE_GIFT_CARD ', null, array() ) as $brand ) {
+		$bad = $payment; $bad['card_details']['card']['card_brand'] = $brand;
+		assert_false( $method->invoke( null, $bad, $attempt ), 'non-gift brand cannot prove gift funding' );
+	}
+	foreach ( array( 0, 1249, 1251, '1250', 1250.0, null ) as $amount ) {
+		$bad = $payment; $bad['amount_money']['amount'] = $amount;
+		assert_false( $method->invoke( null, $bad, $attempt ), 'partial/malformed money cannot prove full funding' );
+	}
+	foreach ( array( 'AUTHORIZED', 'VOIDED', '', null ) as $status ) {
+		$bad = $payment; $bad['card_details']['status'] = $status;
+		assert_false( $method->invoke( null, $bad, $attempt ), 'COMPLETED requires captured gift funds' );
+	}
+	foreach ( array( 'source_type', 'card_details', 'amount_money' ) as $field ) {
+		$bad = $payment; unset( $bad[ $field ] );
+		assert_false( $method->invoke( null, $bad, $attempt ), 'missing funding facts deny acceptance' );
+	}
+	foreach ( array( array(), array( 'square_tender_kind' => 'card' ), array( 'square_tender_kind' => 'future' ) ) as $metadata ) {
+		$bad_attempt = $attempt; $bad_attempt['safe_metadata_json'] = json_encode( $metadata );
+		assert_false( $method->invoke( null, $payment, $bad_attempt ), 'legacy/card/unknown selection cannot accept explicit gift evidence' );
+	}
+} );
+
+db_test( 'Square Gift Card linked Order accepts only one exact full-value gift tender', function () {
+	list( $payload, $binding ) = db_square_orders_projection_fixture();
+	$projection = DoughBoss_Square_Orders::project( $payload, $binding, 37 );
+	$response = db_square_orders_response_fixture( $projection );
+	$id = $response['order']['id'];
+	$payment = array( 'id' => 'sqpayGIFTEXAMPLE000001', 'status' => 'COMPLETED', 'order_id' => $id,
+		'location_id' => $binding['square_location_id'], 'reference_id' => 'db-attempt-37',
+		'amount_money' => array( 'amount' => $projection['amounts']['total'], 'currency' => 'AUD' ) );
+	$response['order']['tenders'] = array( array( 'type' => 'SQUARE_GIFT_CARD', 'payment_id' => $payment['id'], 'amount_money' => $payment['amount_money'] ) );
+	$response['order']['net_amount_due_money'] = array( 'amount' => 0, 'currency' => 'AUD' );
+	assert_false( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $response, $projection, $payment, $id, 'SQUARE_GIFT_CARD' ) ), 'exact gift tender confirms full funding' );
+	assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $response, $projection, $payment, $id ) ), 'legacy CARD proof rejects gift tender' );
+	foreach ( array( 'CARD', 'GIFT_CARD', 'CASH', '', null ) as $type ) {
+		$bad = $response; $bad['order']['tenders'][0]['type'] = $type;
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $id, 'SQUARE_GIFT_CARD' ) ), 'wrong provider tender cannot satisfy gift selection' );
+	}
+	$bad_cases = array();
+	$bad = $response; $bad['order']['tenders'][] = $bad['order']['tenders'][0]; $bad_cases[] = $bad;
+	$bad = $response; $bad['order']['tenders'][0]['amount_money']['amount']--; $bad_cases[] = $bad;
+	$bad = $response; $bad['order']['tenders'][0]['amount_money']['currency'] = 'USD'; $bad_cases[] = $bad;
+	$bad = $response; $bad['order']['tenders'][0]['payment_id'] = 'sqpayANOTHERGIFT00001'; $bad_cases[] = $bad;
+	$bad = $response; $bad['order']['net_amount_due_money']['amount'] = 1; $bad_cases[] = $bad;
+	$bad = $response; $bad['order']['tenders'][0]['tip_money'] = array( 'amount' => 1, 'currency' => 'AUD' ); $bad_cases[] = $bad;
+	foreach ( $bad_cases as $bad ) {
+		assert_true( is_wp_error( DoughBoss_Square_Orders::validate_paid_response( $bad, $projection, $payment, $id, 'SQUARE_GIFT_CARD' ) ), 'ambiguous/partial/split funding stays held' );
+	}
+} );
+
+db_test( 'Square v2 payment payload requires its saved shop location binding', function () {
+	$method = new ReflectionMethod( 'DoughBoss_Square', 'payment_payload' );
+	$method->setAccessible( true );
+	$attempt = array(
+		'id' => 42,
+		'safe_metadata_json' => json_encode( array(
+			'square_shop_slug'   => 'revesby',
+			'square_location_id' => 'LTEST_REVESBY',
+			'square_mode'        => 'test',
+		) ),
+	);
+	$matching = db_square_payment( 2750, 'AUD', 'db-attempt-42' );
+	$matching['location_id'] = 'LTEST_REVESBY';
+	assert_false( is_wp_error( $method->invoke( null, $matching, $attempt, 2750, 'AUD' ) ), 'provider payment at the saved shop location is accepted' );
+
+	$foreign = $matching;
+	$foreign['location_id'] = 'LTEST_BANKSTOWN';
+	assert_same( 'doughboss_pay_create', $method->invoke( null, $foreign, $attempt, 2750, 'AUD' )->get_error_code(), 'provider location must match the immutable saved shop binding' );
+
+	$legacy = $attempt;
+	$legacy['safe_metadata_json'] = json_encode( array( 'square_location_id' => 'LTEST_REVESBY', 'square_mode' => 'test' ) );
+	assert_same( 'doughboss_pay_create', $method->invoke( null, $matching, $legacy, 2750, 'AUD' )->get_error_code(), 'a v2 response cannot be accepted without a saved shop slug' );
+} );
+
+db_test( 'legacy Square transport retains its global location gate', function () {
+	$original = get_option( 'doughboss_settings', array() );
+	$method   = new ReflectionMethod( 'DoughBoss_Square', 'request' );
+	$method->setAccessible( true );
+	try {
+		doughboss_test_set_settings( db_square_settings( array(
+			'square_test_location_id'  => '',
+			'square_test_location_map' => array( 'revesby' => 'LTEST_REVESBY' ),
+		) ) );
+		$result = $method->invoke( null, 'GET', '/v2/payments/sqpaymentEXAMPLE0000000001', array() );
+		assert_same( 'doughboss_pay_config', is_wp_error( $result ) ? $result->get_error_code() : '', 'a legacy request without an explicit mapped binding remains blocked when the global location is blank' );
+	} finally {
+		doughboss_test_set_settings( $original );
+	}
+} );
+
 /**
  * DoughBoss_Square + Square settings tests.
  *
@@ -362,7 +1260,7 @@ db_test(
 	function () {
 		doughboss_test_reset_options();
 
-		assert_same( 'stripe', DoughBoss_Settings::payment_gateway(), 'the default gateway is unchanged' );
+		assert_same( 'square', DoughBoss_Settings::payment_gateway(), 'Square is the default (and only) gateway' );
 		assert_false( DoughBoss_Settings::payments_enabled(), 'payments are off by default' );
 		assert_false( DoughBoss_Settings::square_ready(), 'Square is not ready on a fresh install' );
 		assert_false( DoughBoss_Square::ready(), 'the gateway gate agrees' );
@@ -527,5 +1425,149 @@ db_test(
 
 		doughboss_test_set_settings( db_square_settings( array( 'square_api_version' => '2024-06-04' ) ) );
 		assert_same( '2024-06-04', DoughBoss_Settings::square_api_version(), 'an older valid version is honoured' );
+	}
+);
+
+function db_square_gift_card_response( $id = 'gftc:EXAMPLECARD123', $type = 'DIGITAL', $state = 'ACTIVE', $amount = 1250, $currency = 'AUD' ) {
+	return array(
+		'gift_card' => array(
+			'id'            => $id,
+			'type'          => $type,
+			'state'         => $state,
+			'balance_money' => array(
+				'amount'   => $amount,
+				'currency' => $currency,
+			),
+			'gan'           => 'GAN-MUST-NOT-ESCAPE',
+			'customer_id'   => 'customer-must-not-escape',
+			'extra_field'   => 'must-not-escape',
+		),
+		'extra_response_field' => 'must-not-escape',
+	);
+}
+
+db_test(
+	'Square gift card observations are minimal, exact and never spendable',
+	function () {
+		$method = new ReflectionMethod( 'DoughBoss_Square', 'gift_card_observation' );
+		$method->setAccessible( true );
+		$id = 'gftc:EXAMPLECARD123';
+		foreach ( array( 'DIGITAL', 'PHYSICAL' ) as $type ) {
+			foreach ( array( 'ACTIVE', 'DEACTIVATED', 'BLOCKED', 'PENDING' ) as $state ) {
+				$response = $method->invoke( null, db_square_gift_card_response( $id, $type, $state, 0 ), $id, 'AUD' );
+				assert_same(
+					array( 'id' => $id, 'type' => $type, 'state' => $state, 'balance_minor' => 0, 'currency' => 'AUD' ),
+					$response,
+					$type . ' ' . $state . ' zero-balance observation has no spendable flag or raw provider fields'
+				);
+			}
+		}
+		$positive = $method->invoke( null, db_square_gift_card_response( $id, 'PHYSICAL', 'ACTIVE', 1250 ), $id, 'AUD' );
+		assert_same( 1250, $positive['balance_minor'], 'gift card balance remains an exact nonnegative integer minor amount' );
+	}
+);
+
+db_test(
+	'Square gift card observations reject malformed or mismatched provider evidence',
+	function () {
+		$method = new ReflectionMethod( 'DoughBoss_Square', 'gift_card_observation' );
+		$method->setAccessible( true );
+		$id = 'gftc:EXAMPLECARD123';
+		foreach ( array(
+			'id'       => array( 'gftc:OTHER', '', 42, true, array() ),
+			'type'     => array( 'UNKNOWN', '', 42, null ),
+			'state'    => array( 'UNKNOWN', '', 42, null ),
+		) as $field => $values ) {
+			foreach ( $values as $value ) {
+				$response = db_square_gift_card_response();
+				$response['gift_card'][ $field ] = $value;
+				assert_true( is_wp_error( $method->invoke( null, $response, $id, 'AUD' ) ), 'malformed or mismatched gift card ' . $field . ' is rejected' );
+			}
+		}
+		foreach ( array(
+			'amount'   => array( null, '1250', 1250.5, -1, 9007199254740992, true, array() ),
+			'currency' => array( 'USD', 'aud', '', null, 42, array() ),
+		) as $field => $values ) {
+			foreach ( $values as $value ) {
+				$response = db_square_gift_card_response();
+				$response['gift_card']['balance_money'][ $field ] = $value;
+				assert_true( is_wp_error( $method->invoke( null, $response, $id, 'AUD' ) ), 'malformed or mismatched gift card money ' . $field . ' is rejected' );
+			}
+		}
+		foreach ( array( array(), array( 'gift_card' => 'bad' ), array( 'gift_card' => array() ), array( 'errors' => array( array( 'code' => 'CARD_ERROR' ) ), 'gift_card' => db_square_gift_card_response()['gift_card'] ) ) as $response ) {
+			assert_true( is_wp_error( $method->invoke( null, $response, $id, 'AUD' ) ), 'missing or contradictory gift card response is rejected' );
+		}
+		$response = db_square_gift_card_response();
+		assert_true( is_wp_error( $method->invoke( null, $response, $id, 'USD' ) ), 'configured currency mismatch is rejected' );
+	}
+);
+
+db_test(
+	'Square gift card IDs and native lookup inputs fail closed before provider access',
+	function () {
+		$valid = new ReflectionMethod( 'DoughBoss_Square', 'valid_gift_card_id' );
+		$valid->setAccessible( true );
+		foreach ( array( '', 'gftc:', 'gftc:bad id', 'gftc:bad/slash', 'GAN-EXAMPLE', 'gftc:' . str_repeat( 'a', 129 ), 42, true, null, array() ) as $invalid ) {
+			assert_false( $valid->invoke( null, $invalid ), 'invalid or native gift card ID type is rejected' );
+		}
+		foreach ( array( '', 'gftc:bad id', 'GAN-EXAMPLE', 42, true, null, array() ) as $invalid ) {
+			$result = DoughBoss_Square::retrieve_gift_card( $invalid, 1 );
+			assert_same( 'doughboss_gift_card_input', is_wp_error( $result ) ? $result->get_error_code() : '', 'invalid gift card lookup ID stops before provider access' );
+		}
+		foreach ( array( 0, -1, '1', 1.0, true, null, array() ) as $invalid_location ) {
+			$result = DoughBoss_Square::retrieve_gift_card( 'gftc:EXAMPLECARD123', $invalid_location );
+			assert_same( 'doughboss_gift_card_input', is_wp_error( $result ) ? $result->get_error_code() : '', 'native or nonpositive gift card location stops before provider access' );
+		}
+	}
+);
+
+/** A synthetic provider refund response: never calls Square. */
+function db_square_refund_response( $status = 'COMPLETED' ) {
+	return array( 'refund' => array(
+		'id' => 'sqrefundEXAMPLE0000000001',
+		'payment_id' => 'sqpaymentEXAMPLE0000000001',
+		'status' => $status,
+		'amount_money' => array( 'amount' => 2750, 'currency' => 'AUD' ),
+	) );
+}
+
+db_test(
+	'Square refund acceptance requires completion, not HTTP success',
+	function () {
+		$completed = db_square_refund_response();
+		assert_same( $completed, DoughBoss_Square::validate_refund_response( $completed, 'sqpaymentEXAMPLE0000000001', 2750, 'AUD' ), 'completed refund preserves provider evidence' );
+		foreach ( array( 'PENDING', 'REJECTED', 'FAILED', 'UNKNOWN', '', 'completed' ) as $status ) {
+			$result = DoughBoss_Square::validate_refund_response( db_square_refund_response( $status ), 'sqpaymentEXAMPLE0000000001', 2750, 'AUD' );
+			assert_true( is_wp_error( $result ), $status . ' cannot mark the order refunded' );
+			if ( 'PENDING' === $status ) {
+				assert_same( 'doughboss_refund_pending', $result->get_error_code(), 'pending is distinguished from completion/failure' );
+			}
+		}
+	}
+);
+
+db_test(
+	'Square completed refunds must match the exact requested payment and money',
+	function () {
+		foreach ( array( 'id' => array( '', 'short', array(), '<b>sqrefundEXAMPLE0000000001</b>' ), 'payment_id' => array( 'otherpayment0000000001', array(), '' ), 'status' => array( array(), null ) ) as $field => $values ) {
+			foreach ( $values as $value ) {
+				$response = db_square_refund_response();
+				$response['refund'][ $field ] = $value;
+				assert_true( is_wp_error( DoughBoss_Square::validate_refund_response( $response, 'sqpaymentEXAMPLE0000000001', 2750, 'AUD' ) ), 'malformed or mismatched ' . $field . ' refuses completion' );
+			}
+		}
+		foreach ( array( 'amount' => array( 2700, 2800, -2750, '2750', 2750.5, null, array() ), 'currency' => array( 'USD', 'aud', null, array() ) ) as $field => $values ) {
+			foreach ( $values as $value ) {
+				$response = db_square_refund_response();
+				$response['refund']['amount_money'][ $field ] = $value;
+				assert_true( is_wp_error( DoughBoss_Square::validate_refund_response( $response, 'sqpaymentEXAMPLE0000000001', 2750, 'AUD' ) ), 'malformed or mismatched money ' . $field . ' refuses completion' );
+			}
+		}
+		foreach ( array( array(), array( 'refund' => 'bad' ), array( 'refund' => array() ), array( 'errors' => array( array( 'code' => 'REFUND_ERROR' ) ), 'refund' => db_square_refund_response()['refund'] ) ) as $response ) {
+			assert_true( is_wp_error( DoughBoss_Square::validate_refund_response( $response, 'sqpaymentEXAMPLE0000000001', 2750, 'AUD' ) ), 'absent or contradictory provider evidence refuses completion' );
+		}
+		$response = db_square_refund_response();
+		$response['refund']['amount_money']['amount'] = 1000;
+		assert_same( $response, DoughBoss_Square::validate_refund_response( $response, 'sqpaymentEXAMPLE0000000001', 1000, 'AUD' ), 'a requested partial refund validates only its own exact amount' );
 	}
 );

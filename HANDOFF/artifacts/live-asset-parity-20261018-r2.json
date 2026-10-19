@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-18T01:21:01.8918357Z",
+  "scope": "Anonymous GET of observed public assets versus current checkout; not installed whole-tree parity",
+  "results": [
+    {
+      "path": "public/js/doughboss.js",
+      "status": 200,
+      "bytes": 160942,
+      "live_sha256": "6cfded01496d708d21f41f5228c9e8e25151b764853181b8a187684f80e420f5",
+      "candidate_sha256": "d0a9e82f05e815f92555b4fcf7ecc677d112f6c30a65e056a832733149dd52e9",
+      "matches": false
+    },
+    {
+      "path": "public/js/doughboss-square.js",
+      "status": 200,
+      "bytes": 34635,
+      "live_sha256": "63415dfa7a1af5bd80ac62e103cd30cf4387884d95a0a6eed27738f7f07e316b",
+      "candidate_sha256": "8699d6b7cc9e4eac428c599a8e0fd8b2bd5348233d0ad39676d82b17953bf736",
+      "matches": false
+    },
+    {
+      "path": "public/css/doughboss.css",
+      "status": 200,
+      "bytes": 64288,
+      "live_sha256": "ca3c6835be385d1b69abbde60b2c558b868ac99b9308524e6d1015c4aff8bbe4",
+      "candidate_sha256": "d20cc48cb2f7241e91801c3e639a228260ac930ba8d7039a022fa611db31275e",
+      "matches": false
+    }
+  ]
+}

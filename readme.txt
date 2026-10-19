@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.44.0
+Stable tag: 2.51.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -84,8 +84,77 @@ No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
 
+= 2.51.1 =
+* Remove the unannounced product name from the public catering copy, the catering SEO description, the theme catering page, a public script comment and the readme changelog, with a test that the catering SEO copy never names it. No behaviour changes. Theme 1.8.1.
+
+= 2.51.0 =
+* Store-first ordering: on multi-shop sites customers choose Revesby, Bankstown or Roselands before the menu (open/closed badge, today's hours, prep time), with a "Change store" button that re-checks the cart and removes items the new shop doesn't sell.
+* Pickup time (per shop, when the shop's Capacity mode is set to Live): "ASAP — ready in about N min" or a 15-minute slot today or tomorrow within that shop's hours. Each slot takes a set number of orders (default 6); full slots are shown as Full. The chosen time is held for 10 minutes while paying and re-checked by the server. A paid order is never refused for capacity: if the slot filled or passed during payment it is kept and flagged for staff.
+* Kitchen board: Upcoming section for scheduled orders (they join New one prep-time before pickup, without the alarm firing early), ASAP/Scheduled badges, pickup time on each card, single Accept for timed orders and a "+10 min" button that moves the promise and tells the customer by email/SMS.
+* Per-shop settings (DoughBoss > Shops): Capacity mode Off / Shadow / Live, orders per slot, days ahead (0–7), last-slot cut-off before close (default 20 min), busy extra minutes, pause ordering, holiday closures.
+* Emails, SMS, kitchen tickets, the confirmation page and order tracking show "Pickup at <shop>, <time>". The Square order gets a ticket name and pickup metadata (no fulfilments).
+* Fix: concurrent checkouts could deadlock in MariaDB and fail with a misleading approval error (also present in 2.50); concurrent pickup holds on different slots could deadlock.
+* Database 1.30.0: additive columns only. With every shop on Capacity mode Off, ordering and payments behave as in 2.50, apart from the store chooser on multi-shop sites.
+
+= 2.50.0 =
+* Multi-account Square: each shop (Revesby, Bankstown, Roselands) can take online payments, hosted checkout, catering invoices, customers, loyalty and Club tiers through its OWN Square seller account. New owner-only page DoughBoss > Square accounts: "Connect Square account" per shop (Square OAuth code flow, signed single-use state, session=false in production), pick that account's location, Disconnect (revokes the authorization in Square). A shop that is not connected keeps using the existing single-account settings, so Revesby works unchanged with no setup.
+* Tokens are refreshed automatically (twice-daily check, refreshed once about 7 days old, plus on demand near expiry) and stored in a non-autoloaded option; define DOUGHBOSS_SQUARE_TOKEN_KEY to encrypt them at rest. The application secret is write-only and can come from DOUGHBOSS_SQUARE_TEST_APP_SECRET / DOUGHBOSS_SQUARE_LIVE_APP_SECRET.
+* Webhooks: the one existing application subscription now serves every shop; events are routed by merchant ID, events from sellers this site does not serve are acknowledged and ignored, and oauth.authorization.revoked disconnects the shop with an admin notice.
+* New: copy the Revesby Square menu (categories, modifier lists, items and variations) into another connected shop's Square account, with a dry-run preview first. Images, item options, per-location overrides and inventory are not copied; taxes map to the target account's matching tax.
+* No database schema change.
+
+= 2.49.0 =
+* Menu: inline SVG search icon with a clear button (the old glyph showed as a missing-character box); warm branded tile for items without a photo or with a photo that fails to load; Drinks shown as a compact two-column list.
+* While online ordering is paused the menu shows no per-card "Customise when ordering opens" / "Ordering paused" controls; one sticky "Call to order (02) 9774 2286" bar replaces them. It follows the live ordering setting, so normal add-to-cart controls return automatically when ordering opens. New setting: Call-to-order phone.
+* Menu text: a double-escaped "&amp;" used as "and" (for example Sujuk Special) now shows as "&"; menu and catering package names decode the same way.
+* Hero: photo-motion control is a small corner icon toggle (aria-pressed), hidden when the device asks for reduced motion; the helper caption is gone and stat values and labels no longer run together.
+* New [doughboss_b2b_form type="wholesale|franchise"] enquiry form: REST submit with nonce, honeypot, rate limit and server validation, emailed to the new "Wholesale & franchising email" setting (blank = order notification email) with Reply-To set to the enquirer. Nothing is stored.
+* Store cards (theme): structured rows, Call and Google Maps buttons, and a live Open now / Closed badge in Sydney time from stored location hours (published hours as fallback).
+* Catering: package size, guest range and price shown as separate badges; per-package quantity steppers combine packages; the quote and enquiry routes accept packages[] {id, qty}, priced from the package posts only (highest package deposit % applies), with the selection saved as a readable list in the enquiry notes. A single package_id works as before. Online catering enquiries are pickup from Revesby only: other shops and delivery are refused.
+* Theme DoughBoss Final 1.8.0: single header CTA, "Order Online" becomes "Call to order" while ordering is paused, icon-only menu toggle, one hero stat strip, wholesale/franchising forms, footer "Franchising & partners".
+
+= 2.48.0 =
+* New: itemised paid-order confirmation email ("placed" stage) with line totals, options, discount, GST included, pickup shop name/address/phone and tracking link. Settings > Real-time & Notifications > "Email customer an itemised confirmation when a paid order is placed" (default on). The older template confirmation no longer emails the customer a second time once it was sent; the shop inbox copy is unchanged.
+* Square partial refunds: the payment is re-read; when completed refunds add up to the amount paid the order is marked refunded, otherwise the orders inbox gets one notice per refund.
+* Apple Pay / Google Pay buttons check the checkout form before opening the wallet and show a visible message when the wallet is cancelled or fails.
+* Performance: the Square Web Payments SDK loads only on the order/checkout page (on demand elsewhere); the header shop status refreshes every 120 seconds and stops while the tab is hidden.
+* Order board keeps the tablet screen awake (Screen Wake Lock) where supported.
+* Checkout: opt-in "Remember my details on this device" (name, email, phone stored only in this browser).
+* Housekeeping: Square Loyalty done markers expire after 30 days instead of one permanent option row per order; the Apple Pay domain file moved to its own non-autoloaded option.
+* Local SEO: one schema.org Bakery per shop (name, address, phone, opening hours, Lebanese cuisine); the unverified price range was removed.
+* Distinct /order/ title and /menu/ heading, descriptive hero image alt text, catering pickup and notice line. Theme DoughBoss Final 1.7.0.
+
+= 2.47.0 =
+* New (off by default): Square-hosted checkout. Settings > Square > Checkout style = "Square-hosted checkout page" sends the same itemised, location-bound order to a Square Checkout API payment link and redirects the customer to Square (card, Apple Pay, Google Pay; no tipping, coupons, loyalty or shipping). The kitchen order is created only after the server re-reads the bound Square Order and its Payment and proves a COMPLETED payment for the exact amount, currency and location. Browser return, payment.updated/order.updated webhooks and a 15-minute sweep share one idempotent finalisation; abandoned links are deleted after 60 minutes and their voucher hold released. The embedded card form remains the default and is unchanged.
+
+= 2.46.1 =
+* Fix: Square invoice ids (inv:0-…) were rejected by the commerce path guard, so catering invoices could not be published or re-read.
+
+= 2.46.0 =
+* Catering via Square invoices: managers send deposit and balance invoices from DoughBoss > Catering; Square emails a hosted pay page; invoice webhooks mark legs paid only when Square reports PAID for the exact amount at the mapped location.
+* Catering minimum notice in business days (default 2, weekends excluded), enforced server-side and shown on the form; configurable in Settings.
+* Catering payment receipts to the customer and the catering inbox.
+* Square card declines now close the attempt as failed (no charge) so customers can retry immediately instead of being blocked as 'unknown'; pre-dispatch checkout errors are flagged retry-safe.
+* Square payments carry buyer_email_address from the verified checkout snapshot.
+* Square Loyalty: background accrual of points on paid web orders for existing Square Loyalty members (matched by phone), toggle in Settings.
+* Square is now the default and only selectable gateway; Stripe, Tyro, Mastercard and POSPal settings are hidden (kept for historical refunds; define DOUGHBOSS_SHOW_LEGACY_GATEWAYS to show).
+* Square refund and dispute webhooks: completed full refunds (from WP, Dashboard or POS) mark the order refunded; chargebacks alert the orders inbox.
+* Member tiers (Student, Tradie, Club) as Square customer groups, with a staff page; Club membership synced from Square Subscriptions.
+* Apple Pay and Google Pay on Square checkout (off until enabled), with Apple Pay domain file served from Settings.
+* Approved pre-orders and voucher checkouts can retry after a card decline (bounded); 3DS billing contact uses given and family name.
+
+= 2.45.0 =
+* Refresh storefront asset cache keys for the locally validated release candidate; publication and provider activation remain separate operator gates.
+* Respect reduced-motion preferences in photograph controls and preserve each hero's manual pause choice across preference changes.
+* Support full-value Square Gift Card checkout with server-validated tender identity, and bind refunds to fresh original-payment context.
+* Add an inert durable split-funding ledger and internal exact-ID, GET-only recovery of approved authorizations; public split capture remains unavailable pending ownership and provider acceptance.
+* Retain browse-only and payment-activation safeguards; authorization observations are not paid-order or kitchen-release authority.
+
 = 2.44.0 =
-* Remove the unannounced product name from the public catering copy, the catering SEO title and description, and the theme's home and catering pages. No behaviour changes.
+* Add a named-approver workflow that keeps pre-order requests unpaid and outside the kitchen until a server-verified Stripe payment creates one linked fulfilment order.
+* Store approval actor, timestamp, request revision, immutable fingerprint, private expiring capability and deterministic checkout identity in a fail-closed transactional schema.
+* Route order notices and public order contacts to info@doughboss.com.au, with optional approver SMS through the existing disabled-by-default ClickSend integration.
+* Keep Stripe retries byte-stable after an uncertain response, and extend isolated WordPress/MySQL coverage for approval, permission, replay, rejection and paid release behavior.
 
 = 2.43.2 =
 * Serve prebuilt responsive AVIF/WebP photography for bundled page and homepage heroes, with original JPEG fallbacks and no runtime encoder dependency.

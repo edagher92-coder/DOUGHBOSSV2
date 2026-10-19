@@ -18,6 +18,48 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Applies pending schema/data migrations in order.
  */
 class DoughBoss_Migrations {
+	/** Additive workflow marker only; existing requests remain version zero. */
+	private static function upgrade_to_1_31_0() {
+		if ( ! DoughBoss_Activator::checkout_storage_ready() || ! DoughBoss_Activator::preorder_approval_storage_ready() ) {
+			throw new RuntimeException( 'Staff-selected pickup workflow storage is incomplete or not using InnoDB.' );
+		}
+	}
+
+	/**
+	 * Pickup scheduling (2.51): additive location/order columns. Capacity was
+	 * never live before 2.51, so the old default of 4 orders per slot was never
+	 * enforced; move untouched rows to the new default of 6.
+	 */
+	private static function upgrade_to_1_30_0() {
+		global $wpdb;
+		if ( ! DoughBoss_Activator::capacity_storage_ready() ) {
+			throw new RuntimeException( 'Pickup scheduling storage is incomplete or not using InnoDB.' );
+		}
+		$locations = $wpdb->prefix . 'doughboss_locations';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query( "UPDATE {$locations} SET slot_order_capacity = 6 WHERE slot_order_capacity = 4" );
+	}
+
+	/** Schema reserve only; no writer/provenance/verified claim. */
+	private static function upgrade_to_1_29_0() {
+		if ( ! DoughBoss_Activator::catalogue_operations_storage_ready() ) {
+			throw new RuntimeException( 'Square catalogue operation audit-field storage is incomplete or not using InnoDB.' );
+		}
+	}
+
+	/** Catalogue receipts are additive; no historical order/payment rows are changed. */
+	private static function upgrade_to_1_28_0() {
+		if ( ! DoughBoss_Activator::catalogue_operations_storage_ready() ) {
+			throw new RuntimeException( 'Square catalogue operation storage is incomplete or not using InnoDB.' );
+		}
+	}
+
+	/** Additive split-funding ledger; never backfills historical payments. */
+	private static function upgrade_to_1_27_0() {
+		if ( ! DoughBoss_Activator::payment_ledger_storage_ready() ) {
+			throw new RuntimeException( 'Split funding storage is incomplete or not using InnoDB.' );
+		}
+	}
 
 	/**
 	 * Run any migrations the stored version is behind.
@@ -84,6 +126,14 @@ class DoughBoss_Migrations {
 				'1.21.0' => 'upgrade_to_1_21_0',
 				'1.22.0' => 'upgrade_to_1_22_0',
 				'1.23.0' => 'upgrade_to_1_23_0',
+				'1.24.0' => 'upgrade_to_1_24_0',
+				'1.25.0' => 'upgrade_to_1_25_0',
+				'1.26.0' => 'upgrade_to_1_26_0',
+				'1.27.0' => 'upgrade_to_1_27_0',
+				'1.28.0' => 'upgrade_to_1_28_0',
+				'1.29.0' => 'upgrade_to_1_29_0',
+				'1.30.0' => 'upgrade_to_1_30_0',
+				'1.31.0' => 'upgrade_to_1_31_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
@@ -138,6 +188,59 @@ class DoughBoss_Migrations {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		if ( $audit !== $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $audit ) ) ) {
 			throw new RuntimeException( 'Voucher reversal audit storage was not created.' );
+		}
+	}
+
+	/** 1.26.0 - add separate immutable Square Order identity, without backfill. */
+	private static function upgrade_to_1_26_0() {
+		if ( ! DoughBoss_Activator::payment_storage_ready() ) {
+			throw new RuntimeException( 'Square Order linkage storage is incomplete or invalid.' );
+		}
+	}
+
+	/** 1.25.0 — preserve the server-used historical accounting basis, no backfill. */
+	private static function upgrade_to_1_25_0() {
+		if ( ! DoughBoss_Activator::checkout_storage_ready() ) {
+			throw new RuntimeException( 'Historical accounting-basis checkout storage is incomplete or invalid.' );
+		}
+	}
+
+	/** 1.24.0 — durable approval-before-payment state. */
+	private static function upgrade_to_1_24_0() {
+		global $wpdb;
+		if ( ! DoughBoss_Activator::preorder_approval_storage_ready() ) {
+			throw new RuntimeException( 'Pre-order approval storage, source-request link, or required unique indexes are incomplete or are not using InnoDB.' );
+		}
+
+		// The owner explicitly replaced the former launch inbox. Preserve any
+		// independently customised address while migrating the exact legacy
+		// DoughBoss default so existing installations receive order copies at the
+		// current operational inbox.
+		$settings = get_option( DoughBoss_Settings::OPTION_KEY, array() );
+		if ( is_array( $settings ) && isset( $settings['orders_email'] ) && 'orders@doughboss.com.au' === strtolower( trim( (string) $settings['orders_email'] ) ) ) {
+			$legacy_serialized = maybe_serialize( $settings );
+			$settings['orders_email'] = 'info@doughboss.com.au';
+			$target_serialized = maybe_serialize( $settings );
+			// Compare-and-set the exact option bytes so a manager's concurrent
+			// custom address wins instead of being overwritten by this migration.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					"UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND BINARY option_value = BINARY %s",
+					$target_serialized,
+					DoughBoss_Settings::OPTION_KEY,
+					$legacy_serialized
+				)
+			);
+			if ( false === $updated ) {
+				throw new RuntimeException( 'The operational order inbox could not be migrated safely.' );
+			}
+			wp_cache_delete( DoughBoss_Settings::OPTION_KEY, 'options' );
+			wp_cache_delete( 'alloptions', 'options' );
+			$persisted = get_option( DoughBoss_Settings::OPTION_KEY, array() );
+			if ( is_array( $persisted ) && isset( $persisted['orders_email'] ) && 'orders@doughboss.com.au' === strtolower( trim( (string) $persisted['orders_email'] ) ) ) {
+				throw new RuntimeException( 'The operational order inbox migration did not persist.' );
+			}
 		}
 	}
 

@@ -209,6 +209,1516 @@
                     }
                 ]
             }
+        },
+        "menu/real-v1/zaatar.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "afad7b29109603cfbef22320df5eed2575fc359a17dafa9bf7cc7ae82425dacf",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/zaatar-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "2541ff1ce6a5ea24a6ec3b67f6ee4fb671c664cc1d1486372db5ad7bd0bbaac0",
+                        "bytes": 37542
+                    },
+                    {
+                        "file": "responsive/zaatar-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "aac435ddd9a116873ac53060b3f5910ddb65f12616d810b3f7e7e9d2341c8c31",
+                        "bytes": 52637
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/zaatar-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "d7d8e275562857c6fcf3cbb507c3a424ef502f1dfea13fccd989a3ce0d96921d",
+                        "bytes": 44042
+                    },
+                    {
+                        "file": "responsive/zaatar-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "ed104e8ecbe422d1c8cdde5605b6a83d1109e75f4ffee16e229371a2ab4aef9b",
+                        "bytes": 62560
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/cheese.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "07995120d147af54a0c4caf7b28512c9f0165ca61f6e5a19cf194c5ce73007b7",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/cheese-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "4d60a71c1db40fffdf3865440daa4fca8f1442bb12fa36256bdcbf36a3737571",
+                        "bytes": 26155
+                    },
+                    {
+                        "file": "responsive/cheese-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "7072b21dacea55e6568532c5ddd4bb00897c95174b947f0b7bc7a31528044d5a",
+                        "bytes": 34384
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/cheese-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "ec0154b127e0e0ba8730a8c0d779b771afd3079aaa77f1adfb5267524f498382",
+                        "bytes": 24036
+                    },
+                    {
+                        "file": "responsive/cheese-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "a8d25eda70b53bcdb564aa3159e4f25db08afc1a4b94f464f597509c7c1b65ae",
+                        "bytes": 30512
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/meat.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "2c54b692503224d7664839d90ade85ee1ba7f757b7e51ac7a7650f23aea7538c",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/meat-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "b340118eaf55c80d6728499009dcc3ace4ee8d2f3a849de9a2449e084138659b",
+                        "bytes": 12478
+                    },
+                    {
+                        "file": "responsive/meat-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "474bb82b8ee1791d46ee0d25eef013ae9e0f015a11bb2e55c5cb3e1a1d5ad7ad",
+                        "bytes": 16551
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/meat-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "5054da7530be7a8e68f35fff347ed7c0173f7993f96870532c206ff3d09db0d5",
+                        "bytes": 9912
+                    },
+                    {
+                        "file": "responsive/meat-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "6e23c47f9365e9089916a63db80e813d918ac252d965053ad3bb8d1ac9e7bd8c",
+                        "bytes": 14718
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/sujuk-cheese.jpg": {
+            "width": 653,
+            "height": 440,
+            "source_sha256": "29ddf15834afe1e8be016bb59ad44dd499c02d86d44cf6bc9d7914d479238f41",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/sujuk-cheese-480.avif",
+                        "width": 480,
+                        "height": 323,
+                        "sha256": "c50e1e8b970418c58b49018695edd7ea59529cf86f9761cb9d5eec7833a23344",
+                        "bytes": 23614
+                    },
+                    {
+                        "file": "responsive/sujuk-cheese-653.avif",
+                        "width": 653,
+                        "height": 440,
+                        "sha256": "75d9230d43224d9a5feec48b069952b6a6dc9c15a9fbd8e8a94e6a591715e0a8",
+                        "bytes": 39676
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/sujuk-cheese-480.webp",
+                        "width": 480,
+                        "height": 323,
+                        "sha256": "d6efe24c7efdd6a2d081eac8b30bda6115af90edb7e6698f2c01c3686e14b091",
+                        "bytes": 23932
+                    },
+                    {
+                        "file": "responsive/sujuk-cheese-653.webp",
+                        "width": 653,
+                        "height": 440,
+                        "sha256": "03157694d4dcfc5ba506ade1a217cf2dff1038602636b4f07998c2af292d0d2a",
+                        "bytes": 38144
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/spinach-deluxe.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "fe7376e811e1020dde7c54082a7271b846afba8c6470f40432dd429df48f315c",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/spinach-deluxe-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "c83afac30205a884b49d86f9895e6a31e965d4d728a0bfc34b13e8b313e3d2b6",
+                        "bytes": 13311
+                    },
+                    {
+                        "file": "responsive/spinach-deluxe-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "8162e95b3e22a34f2452f68dcee1b9d65547ca43e57e787f729490aacdb326cf",
+                        "bytes": 17760
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/spinach-deluxe-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "6c63ce3bef514dfbf1a9853945b2b3c5cd5c088c37a0f3d9195967aca01ef478",
+                        "bytes": 12086
+                    },
+                    {
+                        "file": "responsive/spinach-deluxe-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "14ea5bffa024e63327a95ecbca2bfaf63661957e1589a672d48f0f3f99b60148",
+                        "bytes": 17026
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/pepperoni-cheese.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "2450f306e06103f22db7299835c61cb9356d0d01bae70bcf000aec4985a2f7c7",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/pepperoni-cheese-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "e57956c3d7e07e7797bd9a6e7a47cdbefbd8cafbac84e9940fc4d98bae6cadcf",
+                        "bytes": 21810
+                    },
+                    {
+                        "file": "responsive/pepperoni-cheese-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "2225f4e0056ea59ee5159294a709fe40a9f80afac4f375ab6d00d92b71c4de03",
+                        "bytes": 29612
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/pepperoni-cheese-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "8482948af6dd3f4445775b922af8c581b01632c1994450837c62d099a0632bd1",
+                        "bytes": 20076
+                    },
+                    {
+                        "file": "responsive/pepperoni-cheese-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "c9898eb7049310014ab4de960796f7e7a7be5febc00352a66f485720a2575faa",
+                        "bytes": 28270
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/chicken-cheese.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "3166a697b309e298ac832d87e4c7fb97d923ecc5b23499af0cd91255ad5614dc",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/chicken-cheese-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "b353e3f0424bc7aae26bdcefa391c821f8fff8af2e8cb33876491aaea0f48286",
+                        "bytes": 16145
+                    },
+                    {
+                        "file": "responsive/chicken-cheese-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "2a4f7061e252c620489a1c45192d5252b970c4ee6a7786d99a64759d38f7c2f6",
+                        "bytes": 20837
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/chicken-cheese-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "b58a24fbcece2df861b2b5365948306aca7119d9a7af308326638a63d98f791b",
+                        "bytes": 12628
+                    },
+                    {
+                        "file": "responsive/chicken-cheese-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "76f474e4547f539fa95514b07c241326c9b3c47315ec70c44514a9b3186a3857",
+                        "bytes": 16624
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/bbq-chicken.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "4b699084ca14db870f28fc76c5e5201d24001d933b0814e0467570b1eb0c4b45",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/bbq-chicken-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "4858417b4f0ebe8f5d0e74fed7df25c692d4211336cadb82f4a86b86fffd39c4",
+                        "bytes": 15847
+                    },
+                    {
+                        "file": "responsive/bbq-chicken-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "23a44c923cf5df9bd0ebf57d71775a971975eea85fc240c3f103fc481e115102",
+                        "bytes": 21378
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/bbq-chicken-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "477d1f6e1d28a5865a187fd20c8ef335a334fc913991449578501c52fb9ef879",
+                        "bytes": 14904
+                    },
+                    {
+                        "file": "responsive/bbq-chicken-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "a790d3ab7b83724b4e61b70dc9cb4707f94ac8f602af1895bb06129fe7971941",
+                        "bytes": 20694
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/peri-peri-chicken.jpg": {
+            "width": 782,
+            "height": 440,
+            "source_sha256": "f25b15a6f44ed1bc74b3f3949505f22807a9428a69053111cb9322e9ebe4d4e2",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/peri-peri-chicken-480.avif",
+                        "width": 480,
+                        "height": 270,
+                        "sha256": "2869aac7e452004e5e228edd892a2139ce13598310c942dce7af7ceeea1e2288",
+                        "bytes": 13165
+                    },
+                    {
+                        "file": "responsive/peri-peri-chicken-782.avif",
+                        "width": 782,
+                        "height": 440,
+                        "sha256": "9696f441b58f6d558e9b39e5bd2a0309fa8c8d0683a27dad50a7f84093d69a93",
+                        "bytes": 28657
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/peri-peri-chicken-480.webp",
+                        "width": 480,
+                        "height": 270,
+                        "sha256": "da348f5f601053c8bb88d65706ce6c31b2c90999441bc9e70e5b004ff7ad7a09",
+                        "bytes": 12972
+                    },
+                    {
+                        "file": "responsive/peri-peri-chicken-782.webp",
+                        "width": 782,
+                        "height": 440,
+                        "sha256": "d30262b3d783e9880e0e371845f885f17c1588ec2e17f6781ee4d73755cd293a",
+                        "bytes": 26806
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/spinach-pie.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "3085e3ddc63264e44e478d8a7c9313d8b142942f7a588a1681db6adb1134bb32",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/spinach-pie-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "af5a8223d549a769d65f321d755ca2aa7325ee25c04b19bf6ed26fb0955ed8d8",
+                        "bytes": 31742
+                    },
+                    {
+                        "file": "responsive/spinach-pie-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "d6103b702116d35c836c4a41a385b0474472bcf2d0214f2411432787fe117c60",
+                        "bytes": 45818
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/spinach-pie-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "f95e09121992a90c903354370bc87e2b9d1596d6b63edafbdb0a71239b649f48",
+                        "bytes": 31226
+                    },
+                    {
+                        "file": "responsive/spinach-pie-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "f3d8dc5b016c0681ef6b39f322c9714d426756e22415d0b4648bac1a29301fe0",
+                        "bytes": 48832
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/dough-boss-pie.jpg": {
+            "width": 550,
+            "height": 440,
+            "source_sha256": "0a68bd5482ec091d98b19d09ff4f2850adc4aaca5b5c28ac4f766852cb37cbbc",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/dough-boss-pie-480.avif",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "6f19b4282e62982217635a22efa97e67a60ae92d5a02cd3d4f6e7fdac21c0815",
+                        "bytes": 27969
+                    },
+                    {
+                        "file": "responsive/dough-boss-pie-550.avif",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "8a6e62f9dac7cd2b1b342bb95f197fb91d6b27d34579ca24d8fcb823a28e1540",
+                        "bytes": 38854
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/dough-boss-pie-480.webp",
+                        "width": 480,
+                        "height": 384,
+                        "sha256": "6c95b6b9d7d6d4aa57b31c4cc55927d27d79349ac29d6cc0a9c0618c3d184aa3",
+                        "bytes": 26806
+                    },
+                    {
+                        "file": "responsive/dough-boss-pie-550.webp",
+                        "width": 550,
+                        "height": 440,
+                        "sha256": "e35e2561854e51f04e0387438c752b1a468cc749298a82179a34b28e163c243b",
+                        "bytes": 37718
+                    }
+                ]
+            }
+        },
+        "menu/real-v1/aged-cheese-pie.jpg": {
+            "width": 659,
+            "height": 440,
+            "source_sha256": "6d5a094ee8a6dec829c7a921989b72dc40b753bf0610e9b16438c2d8244b7e69",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/aged-cheese-pie-480.avif",
+                        "width": 480,
+                        "height": 320,
+                        "sha256": "abfef821a46fd004e61c2bad02fe2a50d6cde0ac2714bd8bf7cd1608221bba19",
+                        "bytes": 17650
+                    },
+                    {
+                        "file": "responsive/aged-cheese-pie-659.avif",
+                        "width": 659,
+                        "height": 440,
+                        "sha256": "6de955c36a9f2ae4dee287c7dc1e75439e8699f16ce5cee250bf5ebd577e7eb4",
+                        "bytes": 31141
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/aged-cheese-pie-480.webp",
+                        "width": 480,
+                        "height": 320,
+                        "sha256": "10baa07f50b47f63186384ca9f5ba7719b347b128af045efe927e7b0b2b9ad0c",
+                        "bytes": 16908
+                    },
+                    {
+                        "file": "responsive/aged-cheese-pie-659.webp",
+                        "width": 659,
+                        "height": 440,
+                        "sha256": "eeac44e98176ac19b459a6a3beabc799da6c54fef54f5a4d8889d15381de76b8",
+                        "bytes": 28614
+                    }
+                ]
+            }
+        },
+        "menu/brand-v1/coca-cola-classic-600ml.jpg": {
+            "width": 600,
+            "height": 600,
+            "source_sha256": "dffa4a8187c8a8834b5492d954cb3652152593b532dd05ebe66fb0a7a644c563",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-168.avif",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "852ee4f5c206e7a5f286f76090933983590487b16a93d6cc5d35adf8a5954aa5",
+                        "bytes": 2283
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-336.avif",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "c1feadb67fdf8212cdca61bf57369f58c2bdf421aa56767ef9073c83b0d421e4",
+                        "bytes": 6200
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-480.avif",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "ce18ea718bda9659a92ef069e58d314af671c38dc031ccaac292b68eafab1820",
+                        "bytes": 10859
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-600.avif",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "90173d8899233a5f15aec8de30e2aa0cc0c78053c637ff5654fcf22e7c0a38b1",
+                        "bytes": 16965
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-168.webp",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "e345a720f214a05480b5bb599f85016ba08d2500fb317b56f0f0739cfd558c3f",
+                        "bytes": 2210
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-336.webp",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "9d043c30763ab8a435f0ba17a9d9a9f7a8d8578556184011298b2deafd5fdb3a",
+                        "bytes": 6482
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-480.webp",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "7c8a498f7cab193056a34d822bd8c81e145b5595e24fd005762ca5b64d89e324",
+                        "bytes": 11502
+                    },
+                    {
+                        "file": "responsive/coca-cola-classic-600ml-600.webp",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "48bb8190a790ef4bed32d8a0a39a701897e3e8b1970cd59b2cbec1af7459999e",
+                        "bytes": 17464
+                    }
+                ]
+            }
+        },
+        "menu/brand-v1/coca-cola-vanilla-600ml.jpg": {
+            "width": 600,
+            "height": 600,
+            "source_sha256": "5c9e8d35d75bbd9a5d9e09130b5f143076a5b0ad0fe4c63f909f3795def4b751",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-168.avif",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "84561b8b4f606b0947f040269d0ce1a859cc88168b49d272fc50ce46dfd226f3",
+                        "bytes": 2084
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-336.avif",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "a58d10ae8cebc4c396768b2a3975f900ed318895daae44588f82d1177cc0d02e",
+                        "bytes": 5598
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-480.avif",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "323c2122fba8b9fe62002c0685b14d9a6ee1c9bf8af9052befea42f49a7da695",
+                        "bytes": 9795
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-600.avif",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "5c1046586529f9203d458c874d5fdcc5007f8c26ed19ae21292eeb6b69f6848b",
+                        "bytes": 15592
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-168.webp",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "e36b901c789c683abd7962bb744627b7c3b4c2530eb4eb2e5d3cd9a109d04cf5",
+                        "bytes": 1934
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-336.webp",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "a16992ffdfa9fd2b7d0bc884a4116c7f656897dfb69485d843adfc475a50ce77",
+                        "bytes": 5616
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-480.webp",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "ababedb5594f2420709ea12f3d0f6ac47df8b5eeb4b6a8d38138666e45c43ba9",
+                        "bytes": 10016
+                    },
+                    {
+                        "file": "responsive/coca-cola-vanilla-600ml-600.webp",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "a9be09d6b2399487956c9a1e984d7eba0746e7b743275b448a386b36fb1359b4",
+                        "bytes": 15466
+                    }
+                ]
+            }
+        },
+        "menu/brand-v1/coca-cola-zero-600ml.png": {
+            "width": 1770,
+            "height": 1770,
+            "source_sha256": "a8f5d1f8d848c94b9d1495abef84ff46d2faa143947f12b82889c15076f9e69d",
+            "sources": {
+                "avif": [],
+                "webp": [
+                    {
+                        "file": "responsive/coca-cola-zero-600ml-168.webp",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "78971fa3ab577c4f88f032d9d2d2439f3927124698bab834835c7ebd0511d1d7",
+                        "bytes": 3940
+                    },
+                    {
+                        "file": "responsive/coca-cola-zero-600ml-336.webp",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "ac8b7100ee0fc48da392337ef474a664b854235a359b05433905f3bcb3e6cbf0",
+                        "bytes": 9750
+                    },
+                    {
+                        "file": "responsive/coca-cola-zero-600ml-480.webp",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "bcc3680199e21464b1e43edcaa46326ff40bd272bf1dc993e332ddaf30e8e80c",
+                        "bytes": 16376
+                    },
+                    {
+                        "file": "responsive/coca-cola-zero-600ml-960.webp",
+                        "width": 960,
+                        "height": 960,
+                        "sha256": "bf87f3ae8bb89c59881353b1a1622507883d845b72b1e59608441c4d0af954cf",
+                        "bytes": 45742
+                    },
+                    {
+                        "file": "responsive/coca-cola-zero-600ml-1770.webp",
+                        "width": 1770,
+                        "height": 1770,
+                        "sha256": "487d0bd4a4107f2e0b2cbcda4ed5300b571e6260db66db79b1b80adf11fc9f48",
+                        "bytes": 98746
+                    }
+                ]
+            }
+        },
+        "menu/brand-v1/sprite-600ml.jpg": {
+            "width": 600,
+            "height": 600,
+            "source_sha256": "f38bc876124087285e230cf3d382e61f1ad51b4a507d2d9ec832ce9b320a842b",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/sprite-600ml-168.avif",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "67785aeaed0239e5381b085c18e2d124c052e10441017dcca54d0835260c3dae",
+                        "bytes": 1422
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-336.avif",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "9a7cd104c01808774ce0b0c9246e83198e32a02194d33df05076bc223584a76a",
+                        "bytes": 2877
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-480.avif",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "368b0a4a7609cff123346d8a25e703a9fba42c3b019e9a7690d196d1df65ae62",
+                        "bytes": 4117
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-600.avif",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "f4e8a36a7767b55d537af05e2707021a1452395d484d5ab7bc2e0377dfd7e9aa",
+                        "bytes": 5420
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/sprite-600ml-168.webp",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "25db41857a3b8ad525def7c0d336b9705487953a790ba604bbd636c7398c1dc7",
+                        "bytes": 1344
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-336.webp",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "4d83853072267ab945aacf5cce495f45f5fa8f58e01e695aedf447df4656a3d4",
+                        "bytes": 3162
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-480.webp",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "90282e094f27f33ee707f72ab6db65df970e199e346a639eadc6c99a2dfdc7c7",
+                        "bytes": 4894
+                    },
+                    {
+                        "file": "responsive/sprite-600ml-600.webp",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "324982adb14505e6ea0c4f3e6541c9ec8a64aa03dc1769a2deac158b5972a4e6",
+                        "bytes": 6822
+                    }
+                ]
+            }
+        },
+        "menu/brand-v1/fanta-orange-600ml.jpg": {
+            "width": 600,
+            "height": 600,
+            "source_sha256": "8664c2ddc62412a900815e059a51a7161bc0efcd8079104414b71de404c3bf28",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/fanta-orange-600ml-168.avif",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "1521593965741b4391c56308fd741615b283f4f3eef9e98ea6e4726f432159a1",
+                        "bytes": 1627
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-336.avif",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "1aac2c15052c646b42f6ff47d4c87f6283cf4ba4fdc95c065f5128ec90504049",
+                        "bytes": 3528
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-480.avif",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "f0290e218f36c07a7a033f198419e8fb20fba5f28bf06f8e4b62d8d6978e6400",
+                        "bytes": 5158
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-600.avif",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "033d5363b47e12416f59fd6b15563d2ab608970802f6893fe0cadb8dc36a5d46",
+                        "bytes": 6978
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/fanta-orange-600ml-168.webp",
+                        "width": 168,
+                        "height": 168,
+                        "sha256": "0cd92fb91023997c500852eaf5b716a27765d19e970844bfe8de5b37be214f4f",
+                        "bytes": 1658
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-336.webp",
+                        "width": 336,
+                        "height": 336,
+                        "sha256": "83e764d2fc12de5b5c9cbc2d85c8ca263827d0c282b9e433e808c609d8072638",
+                        "bytes": 4154
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-480.webp",
+                        "width": 480,
+                        "height": 480,
+                        "sha256": "fab517440c2699f0d610629525b16f7bbcefb14113686feb4c2df99ca7ed233c",
+                        "bytes": 6856
+                    },
+                    {
+                        "file": "responsive/fanta-orange-600ml-600.webp",
+                        "width": 600,
+                        "height": 600,
+                        "sha256": "e0de18108d93d7e7bcf3ced5882bdec43648ee03efb2ac123aae6e1b4f13f82d",
+                        "bytes": 9886
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/cheese-tomato-olives.webp": {
+            "width": 1447,
+            "height": 1087,
+            "source_sha256": "b25a9c25217a8d567e513046dbd0395789b2266a2b80dc41d64a37e3d73946b6",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/cheese-tomato-olives-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "f5af3858d4d327133b69b6f3847f36bb5b63bcd91a43e124ec1981997ab91f6c",
+                        "bytes": 4413
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "e7fec123be3e9742812d8c91a433d4b987d23f858806aff3608b5cfd62c25441",
+                        "bytes": 13301
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-480.avif",
+                        "width": 480,
+                        "height": 361,
+                        "sha256": "677a3d102fdc468e162bcf51d757f7a066a1b4d36b6ca081d798670ac63fff28",
+                        "bytes": 23702
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-960.avif",
+                        "width": 960,
+                        "height": 721,
+                        "sha256": "8deb6493acad26aea2d2b90051b5d6a77504b8b91780a0bce88801a7f9e97e3b",
+                        "bytes": 75447
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-1447.avif",
+                        "width": 1447,
+                        "height": 1087,
+                        "sha256": "ccb6417665e484315f2effb3c0791f988ce1904116e1c5f5f2e6a039b36873c7",
+                        "bytes": 133039
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/cheese-tomato-olives-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "bc5dab57c387f48d49f98442439eee7d51766f504f71b1597f87152cd10b5c90",
+                        "bytes": 4674
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "4c08c914517e2575cb11d31e7a81a03c6917fc622dc597036f0f8a8ba38dbc95",
+                        "bytes": 14964
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-480.webp",
+                        "width": 480,
+                        "height": 361,
+                        "sha256": "c5a33a9ffd37db38316a92576477bff251066be3e5fb6bfec9715c8751e858a3",
+                        "bytes": 27490
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-960.webp",
+                        "width": 960,
+                        "height": 721,
+                        "sha256": "8ae40590a0e3982a0ab5db7d061cabd2595599e3fd8034440f723a0161242fe3",
+                        "bytes": 94622
+                    },
+                    {
+                        "file": "responsive/cheese-tomato-olives-1447.webp",
+                        "width": 1447,
+                        "height": 1087,
+                        "sha256": "6b6453e1a0325ff11942ab9edb44ab5c072ea4238b3265343dd98f094a271206",
+                        "bytes": 181076
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/half-meat-cheese.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "bd36e42d8c325ca8ca9b730a36e18ea91624417375f5e04b813be62e1e376ed1",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/half-meat-cheese-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "6a04010d76b58dd80433a181941749444c95ca02bdc24356a512f5a36dbdef6f",
+                        "bytes": 4189
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "043ea7f4e47fca3b6659d057ee46fe7f54e607a36ae5ab4f5416c3db7434898b",
+                        "bytes": 13720
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "f6baea407863735d570cc3edc1d039d3fbbc1123b6f54747dac1fac719134e33",
+                        "bytes": 25232
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "2222f1cedc6881c555e07dc846843eca70e20073cbf29d572e9678be97bd0094",
+                        "bytes": 76922
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "9c157251d63d78f2666bd2fcfb5644eacb258a8b6f23cdaab6122be4cc509055",
+                        "bytes": 130679
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/half-meat-cheese-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "86b8702f04e31bf64eb3c58ba3c6825ed9187ac8a5960fbd074f8f695ab87802",
+                        "bytes": 4780
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "bf9415501d1e1aa00aac6d6995b7ecf0c3eb14fd4835b495f07cf06e24abb277",
+                        "bytes": 16070
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "19ac1a6f12367e41c5ff00196603a04fd7bf582a2655c2ba3bde7141bdfbcdf5",
+                        "bytes": 30448
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "00fa935edaebcf5ef034c708b06de8cf545e35041b7f2520e279fa01f0264667",
+                        "bytes": 98052
+                    },
+                    {
+                        "file": "responsive/half-meat-cheese-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "1064649574af9ffdfab99dc503a643d48c4c37e6222791e256c0b236984450d2",
+                        "bytes": 176204
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/labneh-veggie-pizza.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "e619a2909dd5ea31018b7b0628f8813b1232ff398782b2f6cb17f0c2e511377f",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/labneh-veggie-pizza-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "212112d1ed46b0b831e51d96f7c1b355f97f33e6e7093647878183c91f7f1a12",
+                        "bytes": 4809
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "bb3c85638ddf70d48b14be872e2b770897329d0e3bb771f632c36b9141db7926",
+                        "bytes": 14072
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "5cc000167c22386a8bcf2ac84d59fe0627557b7f532ad2aac062f17b3fc177fe",
+                        "bytes": 24469
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "9820a1411e1687ae57aaf9d782f278a439150f0d8b4b568d5102d5268de0d40b",
+                        "bytes": 74346
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "7c61a54612239a378c276f50afadc4b53274027c826fe3341ffc56359e4e86f0",
+                        "bytes": 129519
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/labneh-veggie-pizza-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "5840a4a437c1b22cc864c3c8e991a72fa6d3c9c554364a9732db65422c51b6a6",
+                        "bytes": 5064
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "4256f8b337d51383d7b7045bdd2289c7e2cc826ef94a08b86c64edbdfdc533b8",
+                        "bytes": 15474
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "793ee9349ed868ae561abce62486692f09879cebbd0cc107c8a3c25391e66d80",
+                        "bytes": 27914
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "eea627e3dc7b8f7961c6a63a92165a9914abd039b1eb190c9cea5477f2d7b703",
+                        "bytes": 94952
+                    },
+                    {
+                        "file": "responsive/labneh-veggie-pizza-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "5f583bf6eca0326ed56f1963497a3c0befe4ebf3e506f0bb1853cea12a678c96",
+                        "bytes": 178824
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/sujuk-special.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "b04626019d91a2cc9906a2531a02ee54b99f1edfed696cfdc956386b05d156b4",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/sujuk-special-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "6c167ecd9b3bef19f88080dbf8d2ee90014cfb44b4821adfa8becb456f3f95e4",
+                        "bytes": 4696
+                    },
+                    {
+                        "file": "responsive/sujuk-special-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "e99c348d4c82c509ce585179ab44b9748d2912de56e2d6295b4281ab044e8189",
+                        "bytes": 15346
+                    },
+                    {
+                        "file": "responsive/sujuk-special-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "d7da065722c0ff73711af791604ca11ca990863666c050855b6fe53b4495b074",
+                        "bytes": 28303
+                    },
+                    {
+                        "file": "responsive/sujuk-special-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "47797bc6dbadfdf9c7277e106ba86787e442dd98b53b074c528b1e2d956ff850",
+                        "bytes": 94510
+                    },
+                    {
+                        "file": "responsive/sujuk-special-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "47937d159ff6b67d1b5457d585de04cd7135d3596a94030c0b121e020ebe6c52",
+                        "bytes": 164620
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/sujuk-special-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "61ffebb7fd44a3b84793b040f527bb6ed3cca6dcedeb1a7c20dcb5aa2d1a3547",
+                        "bytes": 4854
+                    },
+                    {
+                        "file": "responsive/sujuk-special-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "2f5d7b1fd5aa31023bbc9d9720b706a41cb2a3a3208c16bb792c2da621684cc9",
+                        "bytes": 16626
+                    },
+                    {
+                        "file": "responsive/sujuk-special-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "c345ac4f6c141c8bcb15563339108cc29f842bbfb1f01fc3ed7ef3cbd7fee2b1",
+                        "bytes": 31430
+                    },
+                    {
+                        "file": "responsive/sujuk-special-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "61ae665f987e03de3d27312b386f7857e249a4415f1a2cb320efea6713dddc4f",
+                        "bytes": 110858
+                    },
+                    {
+                        "file": "responsive/sujuk-special-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "79b0ca34394ee956a8502ef1ed9ed4db3a23ea777695d37399121fc432afacd2",
+                        "bytes": 209824
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/all-meat.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "418324bc9d5d3c28d9298b2258c0078dae14e442f222a0dd66917393146aec18",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/all-meat-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "11d75f9a364a9932bf1dac3b74ecba0a379c6758d30712b662dfdd0b69222dda",
+                        "bytes": 4839
+                    },
+                    {
+                        "file": "responsive/all-meat-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "9c0b1436227b1f480983aa8f7c0a7e17f0586361b1dbace36e1c32a588022fd9",
+                        "bytes": 15631
+                    },
+                    {
+                        "file": "responsive/all-meat-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "543ec78f28ef12bc17a4569f1d15a40ecbca4e6ae65a451d0da7855321cfa4cb",
+                        "bytes": 28683
+                    },
+                    {
+                        "file": "responsive/all-meat-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "7268abd811dd14fc0ece4601799bc5461d2dad3c8f4996b3f3198ae8bc23bf4e",
+                        "bytes": 91919
+                    },
+                    {
+                        "file": "responsive/all-meat-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "f46ba34e288ae5c83415d7e8e9b4c8a4a4420f7b16774bbfb0c6c8929f94ce07",
+                        "bytes": 161576
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/all-meat-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "72d73084183557a123994d39106d96a335b32611ac9e9e23c658a8c3f8be3fc7",
+                        "bytes": 5320
+                    },
+                    {
+                        "file": "responsive/all-meat-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "f85a448ea2015116b10e291fcf9ffc7108f10b0003605c0d7683f8b4c620c19a",
+                        "bytes": 17986
+                    },
+                    {
+                        "file": "responsive/all-meat-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "49703c00c394edc955f7eb2a7a553a759d18546300ca11fc0c6d0f2c2054668c",
+                        "bytes": 33600
+                    },
+                    {
+                        "file": "responsive/all-meat-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "155c5fb9c749bd76b9719ee456bb47d670583e82a9bdfbed29909db33a84075d",
+                        "bytes": 117764
+                    },
+                    {
+                        "file": "responsive/all-meat-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "ccd0aa9835d5b82991be89d1507e4cbfd3ec403feb418b342dc6bd2ac39d9ba3",
+                        "bytes": 217546
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/garlic-prawns.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "fac0b3fbc07ad289859fb4a3db23a8b1dfe0e526102a7a00728b06ad490817c6",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/garlic-prawns-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "ab39e038ab3f9f49b9d9565bbeff5c747b54d7dfb67b46782199b7a15c1111a9",
+                        "bytes": 4817
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "2a80f5d60467b13bd99876c54f600b60cd343594dea941aa28728b1a8547e86b",
+                        "bytes": 15709
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "a1eb705f887bc729dc00e5636dfb7fd662d941169f8123c474d887bfc4221da7",
+                        "bytes": 29707
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "b27183694d2f99219db41e3afe71affe0aeb3a6ce29ce4507035f97665084b35",
+                        "bytes": 100748
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "0334f67391a7b861a0a6f1b8108424dd13adaab69c7153442a055195bacd2be5",
+                        "bytes": 178338
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/garlic-prawns-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "e86b09da69f606fedabc73a428a9568df3a622e98a39ae6c3f1006b5c39ee06b",
+                        "bytes": 5344
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "7f0412d8bd206991587db48fb3d9e3f5249dea24ff9dab1f745366558d15d07f",
+                        "bytes": 18672
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "40d75019f3753519faeb1dd25bd177d8475fd8f1b306e5eb9ddf45b711402bc5",
+                        "bytes": 36402
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "172656afed64d54c25830c5d9ce53972c7d3f3b320d504f8c03f5499ad264488",
+                        "bytes": 128984
+                    },
+                    {
+                        "file": "responsive/garlic-prawns-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "a030b57bea3a80f63136f992f0609805d9ff6265a1a7233fe2e3aac8fdf0e83e",
+                        "bytes": 236522
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/dough-boss-wrap.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "bb0d824b39b48f10f8bc2dd56023b8aef7106ebac87b32efc1e49c8eaac22727",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/dough-boss-wrap-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "a09fedb2e847a44282b10a9306e36d617798f038a91c58b1b723da0f227848ed",
+                        "bytes": 2990
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "2ee7c8b4984176589a16db8918a157bc13af08639cf5cd9200d96f0ffbd82f91",
+                        "bytes": 8935
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "e153a12cc92fb454b1c6c3d3461205cc86a0c57534aafcbfa8bd928aaf980d7e",
+                        "bytes": 15555
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "3e9a15e02fb2eb439e75346fb7c7c457ca47ce9dd1775d2463d680b572ff756e",
+                        "bytes": 44587
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "916b6e96e1019651919625d3ed1c3720ae4cb41dd8fe9c95a4ca7d8def79b345",
+                        "bytes": 76132
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/dough-boss-wrap-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "93dac91b01802520504f8d080a9f7187b116c428389be62fdcb5c37fca0aea1f",
+                        "bytes": 3552
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "023bec174078a1aadcb5a07b3eb84f18519221fc5ce57269bb1db82e44199381",
+                        "bytes": 11718
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "3edc239c9b4f4cd9dfb9c31fe08f87cfdfc847b61108ac5c21b391537680e273",
+                        "bytes": 21242
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "d86c97b5abbe7d0263bbef789ad2973090cdff305df8473ebb2800182692f03f",
+                        "bytes": 64634
+                    },
+                    {
+                        "file": "responsive/dough-boss-wrap-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "768d883e6db09f9ff38821730e3fda384fe8094f874aeadd86633ed8287c1575",
+                        "bytes": 115404
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/ultimate-chicken.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "330652a09b37c58f34197788204ab7a018298302ff988b912a87f76c70ed6921",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/ultimate-chicken-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "2ea710ee463054894ef6b5e80b399dea483d732489d1b613a5aa46ffa6759751",
+                        "bytes": 3513
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "4415ed0d986c604a1f83e73d40ea771c7313269fda963c94f43db2f9adc318c1",
+                        "bytes": 10572
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "af75daee1723e5d997b2379394d66074983f85a2cb6e9716cc5299525947438a",
+                        "bytes": 18791
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "aef798930fac9903659615eb4ff61094e7ae2da82e8603db978bbdcfcd94d559",
+                        "bytes": 57816
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "5a5a5cc5a015eb9b62298e80835c72b9408fac555703da75deb85e0902186846",
+                        "bytes": 100378
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/ultimate-chicken-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "02e221bc52ec1a8aa8b0af1fab8e0f41aca85cf75d7322e0eb6fb566f2d4a452",
+                        "bytes": 4038
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "0cee0ef02295217abea92602cb192340153bd6fd38eae5cbca2c2fb995313abd",
+                        "bytes": 13466
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "2f532c1f49c5d5b85469979c9d74c246d0f4baedd3b49f203241204375ee333b",
+                        "bytes": 24452
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "f416ab57e83849457037fa61e8ad359248075c56997eb7bf41b5f84dce28dd1a",
+                        "bytes": 76820
+                    },
+                    {
+                        "file": "responsive/ultimate-chicken-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "9f9de4cc2547dbfc0e7177573932ed9e302e5bb9bed5c9026971338690baef02",
+                        "bytes": 140648
+                    }
+                ]
+            }
+        },
+        "menu/generated-v1/zaatar-veggie-pizza.webp": {
+            "width": 1448,
+            "height": 1086,
+            "source_sha256": "8c87eb1976465c468a248840baabb0e3b37cd6cdeb99b164204c6761ff8ac73a",
+            "sources": {
+                "avif": [
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-168.avif",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "43022a7b0ab1c115383ade6140a45af272deda0791f7445d45d58ade61064ea6",
+                        "bytes": 4431
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-336.avif",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "28f1e1a0f5d000c8fada313d057bb3f368fd47b932a9581229bada49b890a4b3",
+                        "bytes": 15196
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-480.avif",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "7a380b9f4f7d06c256871ed293db1b82ae3bf5590d4d7d872772398f116b48f5",
+                        "bytes": 29063
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-960.avif",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "30d185f91e7ac797337f715a22867cd4b8ccc49af57d2b7d1ae8365c2401962f",
+                        "bytes": 101953
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-1448.avif",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "7b2484e286ee01ea6c6405cc8cb5f66624cb1ee5f632a7fe1f81bd4393165d58",
+                        "bytes": 180855
+                    }
+                ],
+                "webp": [
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-168.webp",
+                        "width": 168,
+                        "height": 126,
+                        "sha256": "86adb81925d89f40cc6e31871bd2eef3a3154991df61852e9545c439b35de134",
+                        "bytes": 4684
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-336.webp",
+                        "width": 336,
+                        "height": 252,
+                        "sha256": "2fb857fbf8199069fa0c2e2ae58bf5fcf208891bf9754cf8f8862ffd78c33fb1",
+                        "bytes": 16804
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-480.webp",
+                        "width": 480,
+                        "height": 360,
+                        "sha256": "4e7683463242814a538540b22cbe378040b4823851c29b45cc39f7ae098248c9",
+                        "bytes": 33024
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-960.webp",
+                        "width": 960,
+                        "height": 720,
+                        "sha256": "9b58e17677229bfb2d1b032e44775905f5aaa891b41efb2feedd33eaf323a1c5",
+                        "bytes": 120094
+                    },
+                    {
+                        "file": "responsive/zaatar-veggie-pizza-1448.webp",
+                        "width": 1448,
+                        "height": 1086,
+                        "sha256": "942b790b4e1b6a2ee782aa0a104d96d6e15bc465b82d3aa7c3b797540c3986cd",
+                        "bytes": 226194
+                    }
+                ]
+            }
         }
     }
 }

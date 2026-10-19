@@ -2,7 +2,9 @@
 /**
  * Build a static, read-only visual preview from the current theme sources.
  *
- * Usage: php scripts/build-visual-preview.php OUTPUT_DIRECTORY [BASE_PATH]
+ * Usage: php scripts/build-visual-preview.php OUTPUT_DIRECTORY [BASE_PATH] [HERO_MEDIA_DIRECTORY]
+ * Media directory must contain the three receipt-pinned files listed below.
+ * Without local pinned media this is explicitly a photo-only preview, not hero acceptance.
  * Example GitHub Pages base path: /DOUGHBOSSV2/
  */
 
@@ -12,11 +14,34 @@ if ( PHP_SAPI !== 'cli' ) {
 }
 
 $repo_root = dirname( __DIR__ );
+$hero_media_directory = isset( $argv[3] ) ? rtrim( (string) $argv[3], "/\\" ) : '';
+$hero_media = array();
+if ( '' !== $hero_media_directory ) {
+	$hero_media_directory = realpath( $hero_media_directory );
+	if ( false === $hero_media_directory || ! is_dir( $hero_media_directory ) ) {
+		fwrite( STDERR, "HERO_MEDIA_DIRECTORY must be an existing local directory.\n" );
+		exit( 1 );
+	}
+	// Receipt-pinned originals; never fetch production media during a build.
+	$approved_media = array(
+		'doughboss-commercial-v3-web-loop.mp4' => array( 'sha256' => '6035ffcef72dcae2c667ced78cd56d8e7823e5841c6bd530be2e0be9cf9ecff4', 'bytes' => 2720427 ),
+		'doughboss-commercial-v5-poster.jpg' => array( 'sha256' => '1717edb9630d2e7444a8190d1f56a34cb7d9e9b370bc4dbe4260bfd15f68fa9d', 'bytes' => 212551 ),
+		'doughboss-commercial-v6-desktop-square-poster.jpg' => array( 'sha256' => '18bba423cf237b725453a657b6802cff07e949d447f820200fd62a565aab8cb3', 'bytes' => 44957 ),
+	);
+	foreach ( $approved_media as $filename => $record ) {
+		$file = $hero_media_directory . '/' . $filename;
+		if ( ! is_file( $file ) || is_link( $file ) || filesize( $file ) !== $record['bytes'] || hash_file( 'sha256', $file ) !== $record['sha256'] ) {
+			fwrite( STDERR, "Missing or unapproved local hero media: {$filename}\n" );
+			exit( 1 );
+		}
+		$hero_media[ 'https://doughboss.com.au/wp-content/uploads/' . $filename ] = array_merge( $record, array( 'output' => 'preview/media/' . $filename ) );
+	}
+}
 $output    = isset( $argv[1] ) ? rtrim( (string) $argv[1], "/\\" ) : '';
 $base_path = isset( $argv[2] ) ? (string) $argv[2] : '/DOUGHBOSSV2/';
 
 if ( '' === $output ) {
-	fwrite( STDERR, "Usage: php scripts/build-visual-preview.php OUTPUT_DIRECTORY [BASE_PATH]\n" );
+	fwrite( STDERR, "Usage: php scripts/build-visual-preview.php OUTPUT_DIRECTORY [BASE_PATH] [HERO_MEDIA_DIRECTORY]\n" );
 	exit( 1 );
 }
 if ( file_exists( $output ) ) {
@@ -29,23 +54,41 @@ if ( ! preg_match( '#^(?:\./|/[A-Za-z0-9._~/-]*/)$#', $base_path ) || false !== 
 }
 
 $source_files = array(
+	'scripts/hero-commercial/homepage-hero-v6-snippet.php',
 	'themes/doughboss-final/functions.php',
 	'themes/doughboss-final/header.php',
 	'themes/doughboss-final/footer.php',
 	'themes/doughboss-final/front-page.php',
 	'themes/doughboss-final/page-order.php',
+	'themes/doughboss-final/page-franchising.php',
+	'themes/doughboss-final/page-wholesale.php',
+	'themes/doughboss-final/page-catering.php',
+	'themes/doughboss-final/page-locations.php',
+	'themes/doughboss-final/page-members-events.php',
+	'scripts/hero-commercial/members-events-page.html',
+	'themes/doughboss-final/template-parts/partner-page.php',
 	'themes/doughboss-final/template-parts/locations.php',
+	'includes/class-doughboss-post-types.php',
 	'includes/class-doughboss-shortcodes.php',
 	'includes/class-doughboss-images.php',
+	'includes/class-doughboss-square-loyalty.php',
 	'includes/class-doughboss-menu-options.php',
+	'includes/class-doughboss-store-hours.php',
+	'includes/class-doughboss-b2b.php',
 );
 $asset_files  = array(
 	'themes/doughboss-final/style.css',
 	'themes/doughboss-final/assets/theme.js',
+	'themes/doughboss-final/assets/install.js',
 	'public/css/doughboss.css',
+	'public/css/doughboss-preferences.css',
 	'public/css/doughboss-order-page.css',
 	'public/css/doughboss-manoush-hero.css',
+	'public/css/doughboss-catering.css',
+	'public/css/doughboss-b2b.css',
 	'public/js/doughboss.js',
+	'public/js/doughboss-preferences.js',
+	'public/js/doughboss-catering.js',
 	'public/js/doughboss-shop-status.js',
 	'public/js/doughboss-manoush-hero.js',
 	'public/fonts/bebasneue-400.woff2',
@@ -60,6 +103,20 @@ $asset_files  = array(
 	'public/images/menu/real-v1/spinach-pie.jpg',
 	'public/images/menu/real-v1/labneh-veggie-wrap.jpg',
 	'public/images/menu/real-v1/choco-banana.jpg',
+	'public/images/menu/brand-v1/coca-cola-classic-600ml.jpg',
+	'public/images/menu/brand-v1/coca-cola-zero-600ml.png',
+	'public/images/menu/brand-v1/coca-cola-vanilla-600ml.jpg',
+	'public/images/menu/brand-v1/sprite-600ml.jpg',
+	'public/images/menu/brand-v1/fanta-orange-600ml.jpg',
+	'public/images/menu/generated-v1/cheese-tomato-olives.webp',
+	'public/images/menu/generated-v1/half-meat-cheese.webp',
+	'public/images/menu/generated-v1/labneh-veggie-pizza.webp',
+	'public/images/menu/generated-v1/sujuk-special.webp',
+	'public/images/menu/generated-v1/zaatar-veggie-pizza.webp',
+	'public/images/menu/generated-v1/all-meat.webp',
+	'public/images/menu/generated-v1/garlic-prawns.webp',
+	'public/images/menu/generated-v1/dough-boss-wrap.webp',
+	'public/images/menu/generated-v1/ultimate-chicken.webp',
 );
 $preview_files = array(
 	'scripts/visual-preview/wp-shim.php',
@@ -130,6 +187,15 @@ try {
 
 	$GLOBALS['doughboss_preview_repo_root'] = $repo_root;
 	$GLOBALS['doughboss_preview_base_path'] = $base_path;
+	$GLOBALS['doughboss_preview_hero_media'] = $hero_media;
+	if ( $hero_media ) {
+		if ( ! mkdir( $output . '/preview/media', 0777, true ) ) { throw new RuntimeException( 'Could not create hero media directory.' ); }
+		foreach ( $hero_media as $record ) {
+			if ( ! copy( $hero_media_directory . '/' . basename( $record['output'] ), $output . '/' . $record['output'] ) || hash_file( 'sha256', $output . '/' . $record['output'] ) !== $record['sha256'] ) {
+				throw new RuntimeException( 'Could not copy pinned hero media.' );
+			}
+		}
+	}
 	require $repo_root . '/scripts/visual-preview/wp-shim.php';
 	$fixture_json = json_encode( doughboss_preview_fixture(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP );
 	if ( false === $fixture_json || false === file_put_contents( $output . '/preview/menu-options.js', 'window.DoughBossPreviewOptions = ' . $fixture_json . ";\n" ) ) {
@@ -139,15 +205,25 @@ try {
 	$pages = array(
 		'index.html'  => array( 'template' => 'front-page.php', 'ordering_open' => true, 'title' => 'Dough Boss visual preview' ),
 		'order.html'  => array( 'template' => 'page-order.php', 'ordering_open' => true, 'title' => 'Order page visual preview' ),
+		'cart.html'   => array( 'template' => 'page-order.php', 'ordering_open' => true, 'title' => 'Synthetic cart and checkout visual preview' ),
 		'paused.html' => array( 'template' => 'page-order.php', 'ordering_open' => false, 'title' => 'Paused order page visual preview' ),
+		'partners.html' => array( 'template' => 'page-franchising.php', 'ordering_open' => false, 'title' => 'Partnerships visual preview' ),
+		'wholesale.html' => array( 'template' => 'page-wholesale.php', 'ordering_open' => false, 'title' => 'Wholesale visual preview' ),
+		'catering.html' => array( 'template' => 'page-catering.php', 'ordering_open' => false, 'title' => 'Catering visual preview' ),
+		'locations.html' => array( 'template' => 'page-locations.php', 'ordering_open' => false, 'title' => 'Locations visual preview' ),
+		'members.html' => array( 'template' => 'page-members-events.php', 'ordering_open' => false, 'title' => 'Members & Events' ),
 	);
 	foreach ( $pages as $filename => $page ) {
+		$GLOBALS['doughboss_preview_cart'] = 'cart.html' === $filename;
 		$html = doughboss_preview_render_page( $page['template'], $page['ordering_open'], $page['title'] );
 		if ( false === file_put_contents( $output . '/' . $filename, $html ) ) {
 			throw new RuntimeException( 'Could not write ' . $filename );
 		}
 	}
 
+	foreach ( $GLOBALS['doughboss_preview_generated_scripts'] ?? array() as $relative => $script ) {
+		if ( false === file_put_contents( $output . '/' . $relative, $script ) ) { throw new RuntimeException( 'Could not write shared presentation controller.' ); }
+	}
 	$commit_output = array();
 	$commit_status = 0;
 	exec( 'git -C ' . escapeshellarg( $repo_root ) . ' rev-parse HEAD', $commit_output, $commit_status );
@@ -170,6 +246,9 @@ try {
 	}
 	ksort( $output_hashes );
 	$manifest = array(
+		'hero_integration' => $hero_media ? 'shared-snippet-pinned-media' : 'photo-only-approved-film-not-included',
+		'hero_media' => $hero_media,
+		'generated_scripts' => array_keys( $GLOBALS['doughboss_preview_generated_scripts'] ?? array() ),
 		'preview_only'  => true,
 		'source_commit' => $commit,
 		'base_path'     => $base_path,

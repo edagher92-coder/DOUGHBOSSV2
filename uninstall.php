@@ -98,6 +98,14 @@ delete_option( 'doughboss_delivery_autodisabled' );
 delete_option( 'doughboss_printer_watermark' );
 delete_option( 'doughboss_email_stage_log' );
 delete_option( 'doughboss_portal_routes_version' );
+delete_option( 'doughboss_square_apple_pay_domain_file' );
+// 2.50.0 per-shop Square OAuth. Seller authorizations stay listed in each
+// Square Dashboard (Account & Settings › Apps) until the seller removes them.
+delete_option( 'doughboss_square_oauth' );
+delete_option( 'doughboss_square_oauth_secret' );
+delete_option( 'doughboss_square_oauth_notices' );
+delete_option( 'doughboss_square_catalog_copy_map' );
+wp_clear_scheduled_hook( 'doughboss_square_oauth_refresh' );
 delete_transient( 'doughboss_migrating' );
 
 // Shop assignments are plugin-owned attendance/KDS metadata. Retaining them
@@ -115,6 +123,16 @@ $wpdb->query(
 		$wpdb->esc_like( $voucher_email_marker_prefix ) . '%'
 	)
 );
+// Square Loyalty done markers (legacy per-order options and 2.48.0 transients)
+// and once-per-refund partial-refund notice markers.
+foreach ( array( 'doughboss_sqloy_', '_transient_doughboss_sqloy_', '_transient_timeout_doughboss_sqloy_', 'doughboss_sq_partial_refund_' ) as $doughboss_marker_prefix ) {
+	$wpdb->query(
+		$wpdb->prepare(
+			"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+			$wpdb->esc_like( $doughboss_marker_prefix ) . '%'
+		)
+	);
+}
 // phpcs:enable
 
 // Remove the custom capabilities and the kitchen role.
@@ -133,6 +151,7 @@ remove_role( 'doughboss_staff' );
 // without a prior deactivation event).
 wp_clear_scheduled_hook( 'doughboss_pospal_outbox_dispatch' );
 wp_clear_scheduled_hook( 'doughboss_pospal_outbox_reconcile' );
+wp_clear_scheduled_hook( 'doughboss_square_hosted_sweep' );
 
 // Clean up checkout idempotency transients.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery

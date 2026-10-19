@@ -6,8 +6,141 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 
-function extractFunction(file, name, context) {
-	const source = fs.readFileSync(file, 'utf8');
+function squareDashboardHarness(responder) {
+	function element(tag = 'div') {
+		return { tag, children: [], style: {}, attributes: {}, listeners: {}, textContent: '', value: 'all',
+			get firstChild() { return this.children[0] || null; },
+			appendChild(child) { this.children.push(child); return child; },
+			removeChild(child) { this.children.splice(this.children.indexOf(child), 1); },
+			setAttribute(key, value) { this.attributes[key] = value; },
+			removeAttribute(key) { delete this.attributes[key]; },
+			addEventListener(key, callback) { this.listeners[key] = callback; } };
+	}
+	const controls = {};
+	['preview', 'status-button', 'location', 'status', 'content'].forEach(key => { controls[key] = element(); });
+	const root = element();
+	root.querySelector = selector => controls[selector.match(/data-square-([^\]]+)/)[1]];
+	const requests = [];
+	const sessionValues = new Map();
+	const window = { sessionStorage: {
+		getItem: key => sessionValues.has(key) ? sessionValues.get(key) : null,
+		setItem: (key, value) => sessionValues.set(key, String(value)),
+		removeItem: key => sessionValues.delete(key)
+	}, DoughBossSquareDashboard: { restUrl: '/wp-json/doughboss/v1', nonce: 'synthetic-nonce' },
+		fetch: async (url, options) => { requests.push({ url, options }); return responder(url, options); } };
+	const document = { getElementById: () => root, createElement: element };
+	vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/js/doughboss-square-dashboard.js'), 'utf8'), { window, document, Intl, Number, Array, String, Error, encodeURIComponent });
+	const textOf = node => [node.textContent, ...node.children.map(textOf)].join(' ');
+	return { controls, requests, text: () => textOf(controls.content), settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+function squareDashboardPayload(mode = 'status', location = 'all') {
+	const payload = { schema_version: 1, source: 'square', data_state: 'not_connected',
+		connection: { state: 'not_configured', environment: 'test', credentials_present: false, provider_verified: false },
+		readiness: { schema_version: 1, state: 'not_attested', merchant_verification: 'not_attested', location_verification: 'not_attested',
+			permissions: 'not_attested', account_eligibility: 'not_attested', sync_state: 'not_recorded', last_successful_sync: null,
+			api: { configured_pin: '2025-05-21', timecards_minimum: '2025-05-21', timecards_version_state: 'meets_minimum' },
+			capabilities: { payments_refunds: 'not_attested', gift_card_balance_redemption: 'not_attested', gift_card_purchase_delivery: 'not_implemented',
+				gift_card_split_checkout: 'disabled', loyalty: 'not_implemented', loyalty_subscription: 'not_attested', catalogue_inventory: 'not_implemented',
+				timecards: 'not_implemented', staff_permissions_passcodes_payroll: 'dashboard_only', team_sales_tip_activity_reports: 'unsupported', reporting_costing: 'not_implemented' } },
+		staff: { managed_by: 'square', attendance_available: false },
+		planned_location: { label: 'Planned location', state: 'private_unmapped' },
+		locations: ['revesby', 'bankstown', 'roselands'].map(id => ({ id, name: id, state: 'unmapped' })) };
+	if (mode === 'demo') Object.assign(payload, { source: 'synthetic', data_state: 'demo', demo: true, currency: 'AUD', selected_location: location,
+		summary: { gross_sales_minor: 450, refunds_minor: 0, net_sales_minor: 450, orders: 1, average_order_minor: 450 },
+		location_summaries: [{ id: 'bankstown', name: 'Bankstown', gross_sales_minor: 450, refunds_minor: 0, net_sales_minor: 450, orders: 1, average_order_minor: 450 }],
+		sales_series: [{ label: '08:00', gross_sales_minor: 450 }],
+		orders: [{ id: 'DEMO-1', location_id: 'bankstown', location_name: 'Bankstown', customer: '<img src=x onerror=alert(1)>', status: 'Ready', amount_minor: 450,
+			items: [{ name: 'Zaatar', quantity: 1, unit_price_minor: 450 }] }] });
+	return payload;
+}
+
+test('Square dashboard starts disconnected and demo needs an explicit action', async () => {
+	const harness = squareDashboardHarness(async url => ({ ok: true, json: async () => squareDashboardPayload(url.includes('mode=demo') ? 'demo' : 'status') }));
+	await harness.settle();
+	assert.match(harness.requests[0].url, /mode=status/);
+	assert.equal(harness.requests[0].options.headers['X-WP-Nonce'], 'synthetic-nonce');
+	assert.match(harness.text(), /Not configured/);
+	assert.doesNotMatch(harness.text(), /Demo orders/);
+	assert.equal(harness.controls.location.disabled, true);
+	assert.equal(harness.controls['status-button'].hidden, true);
+	harness.controls.preview.listeners.click();
+	await harness.settle();
+	assert.match(harness.text(), /synthetic preview/);
+	assert.match(harness.text(), /Team and attendance/);
+	assert.match(harness.text(), /Square attendance integration not implemented/);
+	assert.match(harness.text(), /No clock controls or attested Square attendance records are provided by this dashboard/);
+	assert.doesNotMatch(harness.text(), /attendance integration (?:completed|implemented|verified|attested)|attendance records (?:are )?(?:verified|attested)/i);
+	assert.match(harness.text(), /Unannounced/);
+	assert.match(harness.text(), /<img src=x onerror=alert\(1\)>/);
+	assert.equal(harness.controls.location.disabled, false);
+	assert.equal(harness.controls['status-button'].hidden, false);
+	harness.controls['status-button'].listeners.click();
+	await harness.settle();
+	assert.match(harness.requests[2].url, /mode=status/);
+	assert.doesNotMatch(harness.text(), /Demo orders/);
+	assert.equal(harness.controls['status-button'].hidden, true);
+});
+
+test('Square dashboard request failure never falls back to demo figures', async () => {
+	const harness = squareDashboardHarness(async () => { throw new Error('network'); });
+	await harness.settle();
+	assert.match(harness.controls.status.textContent, /could not be loaded/);
+	assert.doesNotMatch(harness.text(), /Demo orders|Gross sales/);
+	assert.equal(harness.requests.length, 1);
+	assert.equal(harness.controls.content.attributes['aria-busy'], undefined);
+});
+
+test('Square dashboard refuses a response for the wrong selected shop', async () => {
+	const harness = squareDashboardHarness(async url => ({ ok: true, json: async () => squareDashboardPayload(url.includes('mode=demo') ? 'demo' : 'status', 'all') }));
+	await harness.settle();
+	harness.controls.location.value = 'bankstown';
+	harness.controls.preview.listeners.click();
+	await harness.settle();
+	assert.match(harness.requests[1].url, /location=bankstown/);
+	assert.match(harness.controls.status.textContent, /could not be loaded/);
+	assert.doesNotMatch(harness.text(), /Demo orders/);
+});
+
+test('Square dashboard retry recovers connection status without substituting demo data', async () => {
+	let attempts = 0;
+	const harness = squareDashboardHarness(async () => {
+		if (++attempts === 1) throw new Error('network');
+		return { ok: true, json: async () => squareDashboardPayload() };
+	});
+	await harness.settle();
+	const retry = harness.controls.content.children.find(child => child.tag === 'button');
+	assert.ok(retry, 'API failure offers a retry control');
+	retry.listeners.click();
+	await harness.settle();
+	assert.equal(attempts, 2);
+	assert.match(harness.controls.status.textContent, /status loaded/);
+	assert.match(harness.text(), /Not configured/);
+	assert.doesNotMatch(harness.text(), /Demo orders/);
+});
+
+test('Square dashboard distinguishes configured mappings without treating them as connected data', async () => {
+	const configuredPayload = squareDashboardPayload();
+	configuredPayload.connection = { state: 'configured_unverified', environment: 'test', credentials_present: true, provider_verified: false };
+	configuredPayload.locations = [
+		{ id: 'revesby', name: 'revesby', state: 'unmapped' },
+		{ id: 'bankstown', name: 'bankstown', state: 'configured_unverified' }
+	];
+	const configured = squareDashboardHarness(async () => ({ ok: true, json: async () => configuredPayload }));
+	await configured.settle();
+	assert.match(configured.text(), /Mapped, not verified/);
+	assert.doesNotMatch(configured.text(), /Demo orders|Gross sales|Net sales|Average order/);
+
+	const unsupportedPayload = squareDashboardPayload();
+	unsupportedPayload.locations[0].state = 'connected';
+	const unsupported = squareDashboardHarness(async () => ({ ok: true, json: async () => unsupportedPayload }));
+	await unsupported.settle();
+	assert.match(unsupported.controls.status.textContent, /could not be loaded/);
+	assert.doesNotMatch(unsupported.text(), /Demo orders|Gross sales|Net sales|Average order/);
+});
+
+function extractFunction(file, name, context, sourceOverride) {
+	const source = typeof sourceOverride === 'string' ? sourceOverride : fs.readFileSync(file, 'utf8');
 	const marker = 'function ' + name + '(';
 	const start = source.indexOf(marker);
 	assert.notEqual(start, -1, name + ' must exist in ' + path.basename(file));
@@ -31,9 +164,1230 @@ function extractFunction(file, name, context) {
 }
 
 const storefront = path.resolve(__dirname, '..', 'public', 'js', 'doughboss.js');
+const orderboard = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-orderboard.js');
 const square = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-square.js');
 const shopStatus = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-shop-status.js');
 const catering = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-catering.js');
+
+function cartRefreshHarness() {
+	const events = {}, requests = [], checkouts = [];
+	const el = (tag, attrs = {}, children = []) => {
+		const node = storefrontElement(tag);
+		for (const [key, value] of Object.entries(attrs)) {
+			if (key === 'class') node.className = value;
+			else if (key === 'text') node.textContent = value;
+			else if (key === 'hidden') node.hidden = true;
+			else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+			else node.setAttribute(key, value);
+		}
+		children.forEach(child => { if (child) node.appendChild(child); });
+		return node;
+	};
+	const root = el('div');
+	const cfg = { ordering_open: true, single_location_mode: true, single_location_id: 1, enable_pickup: true };
+	const context = {
+		el, I18N: {}, Promise, Number, activeTableContext: () => null,
+		payingOnline: () => false, paymentMutationLock: false, lastCartItemCount: 0,
+		orderJourney: () => ({ element: el('ol'), set() {} }),
+		pickupPicker: () => ({ element: el('div'), hide() {}, show() {} }),
+		pickupSchedulingActive: () => false, cartItemCount: cart => cart.items.length,
+		getConfig: () => Promise.resolve(cfg),
+		getLocations: () => Promise.resolve([{ id: 1, name: 'Synthetic shop' }]),
+		request: url => new Promise((resolve, reject) => requests.push({ url, resolve, reject })),
+		cartLine: line => el('article', { text: line.name }),
+		totalsBlock: totals => el('div', { text: 'Total ' + totals.total }),
+		voucherBox: () => el('div'), typeRadio: () => el('input'), setLocation() {},
+		document: { addEventListener: (name, fn) => { events[name] = fn; } },
+		checkoutForm: () => {
+			const form = el('form');
+			form.customer = { value: '' };
+			form.savedAttempt = 'existing-attempt-reference';
+			const instance = { form, ready: true, updates: [],
+				update: (type, totals) => { instance.updates.push(totals.total); },
+				setCartReady: ready => { instance.ready = ready; }
+			};
+			checkouts.push(instance);
+			return instance;
+		}
+	};
+	extractFunction(storefront, 'renderCart', context)(root);
+	const find = name => {
+		const walk = node => node.className.split(' ').includes(name) ? node : node.children.map(walk).find(Boolean);
+		return walk(root);
+	};
+	const cart = total => ({ items: [{ name: 'Synthetic pizza', quantity: 1 }], totals: { total } });
+	return { root, requests, checkouts, events, find, cart,
+		settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+test('cart refresh failure retains the actual form node, fields and attempt; retry applies only the latest read', async () => {
+	const h = cartRefreshHarness();
+	h.requests[0].resolve(h.cart(10));
+	await h.settle();
+	assert.equal(h.checkouts.length, 1);
+	const original = h.checkouts[0];
+	original.form.customer.value = 'Typed details survive';
+	const parent = original.form.parentNode;
+	h.events['doughboss:cart-updated']();
+	assert.equal(original.ready, false, 'a refresh immediately makes new checkout unavailable');
+	h.requests[1].reject(new Error('Synthetic cart read failure'));
+	await h.settle();
+	assert.equal(original.form.parentNode, parent, 'existing form is not detached');
+	assert.equal(parent.children[0], original.form, 'same form instance remains mounted');
+	assert.equal(original.form.customer.value, 'Typed details survive');
+	assert.equal(original.form.savedAttempt, 'existing-attempt-reference');
+	assert.equal(h.checkouts.length, 1);
+	assert.equal(h.find('db-cart-refresh').getAttribute('role'), 'alert');
+	assert.match(h.find('db-cart-refresh').children[0].textContent, /last confirmed/);
+	const retry = h.find('db-cart-refresh-retry');
+	assert.equal(retry.hidden, false);
+	retry.listeners.click();
+	retry.listeners.click();
+	assert.equal(h.requests.length, 3, 'double retry starts one read');
+	h.events['doughboss:cart-updated']();
+	assert.equal(h.requests.length, 4);
+	h.requests[3].resolve(h.cart(14));
+	await h.settle();
+	h.requests[2].resolve(h.cart(11));
+	await h.settle();
+	assert.deepEqual(original.updates, [14], 'late older read cannot restore stale totals');
+	assert.equal(original.ready, true);
+	assert.equal(h.find('db-cart-refresh').hidden, true);
+	assert.equal(h.checkouts.length, 1);
+	assert.equal(parent.children[0], original.form);
+});
+
+test('newer cart refresh success is not undone by an older rejection', async () => {
+	const h = cartRefreshHarness();
+	h.requests[0].resolve(h.cart(10));
+	await h.settle();
+	assert.equal(h.checkouts.length, 1);
+	const original = h.checkouts[0];
+	const parent = original.form.parentNode;
+	original.form.customer.value = 'Typed customer identity';
+	const originalSavedAttempt = original.form.savedAttempt;
+	h.events['doughboss:cart-updated']();
+	assert.equal(h.requests.length, 2);
+	assert.equal(original.ready, false, 'older refresh is pending');
+	h.events['doughboss:cart-updated']();
+	assert.equal(h.requests.length, 3);
+	assert.equal(original.ready, false, 'newer refresh is pending');
+	h.requests[2].resolve(h.cart(22));
+	await h.settle();
+	assert.equal(original.ready, true, 'newer successful read restores readiness');
+	h.requests[1].reject(new Error('Stale older read rejected'));
+	await h.settle();
+	assert.equal(original.ready, true, 'older failure cannot invalidate newer success');
+	assert.deepEqual(original.updates, [22]);
+	assert.equal(h.checkouts.length, 1);
+	assert.equal(original.form.parentNode, parent);
+	assert.equal(parent.children[0], original.form);
+	assert.equal(original.form.customer.value, 'Typed customer identity');
+	assert.equal(original.form.savedAttempt, originalSavedAttempt);
+	assert.equal(h.find('db-cart-refresh').hidden, true);
+});
+
+test('initial cart read failure exposes a read-only retry and can recover without a page reload', async () => {
+	const h = cartRefreshHarness();
+	h.requests[0].reject(new Error('Synthetic initial failure'));
+	await h.settle();
+	assert.equal(h.checkouts.length, 0);
+	h.find('db-cart-refresh-retry').listeners.click();
+	h.requests[1].resolve(h.cart(10));
+	await h.settle();
+	assert.equal(h.checkouts.length, 1);
+	assert.equal(h.checkouts[0].ready, true);
+	assert.ok(h.requests.every(request => request.url.startsWith('/cart?')), 'retry only repeats reads');
+});
+
+function checkoutSubmitHarness(options = {}) {
+	const source = fs.readFileSync(storefront, 'utf8');
+	const start = source.indexOf('function checkoutForm(');
+	assert.notEqual(start, -1);
+	const checkoutSource = source.slice(start);
+	const marker = "form.addEventListener('submit', function (e) {";
+	assert.ok(checkoutSource.includes(marker));
+	const renamed = checkoutSource.replace(marker, "form.addEventListener('submit', function checkoutSubmit(e) {");
+	const requests = [], confirmations = [], lockEvents = [], announcements = [];
+	const form = storefrontElement('form');
+	let cartReady = options.cartReady !== false;
+	form.doughbossCartReady = () => cartReady;
+	form.doughbossCartGuard = () => !cartReady;
+	let nextKey = 0;
+	const crypto = { randomUUID: () => 'synthetic-checkout-' + (++nextKey) };
+	const valueField = value => ({ querySelector: () => ({ value }) });
+	const ctx = {
+		form, submit: { disabled: false, textContent: 'Place order' }, msg: { className: '', textContent: '' },
+		name: valueField('Preview Customer'), email: valueField('preview@example.invalid'),
+		phone: valueField('0000000000'), address: valueField(''), notes: valueField('Synthetic only'),
+		orderType: 'pickup', getLocationId: () => 1, storedLocationId: () => 1,
+		pickupPayloadFields: () => ({}), pickupBody: () => ({}), pickup: null,
+		paying: false, stripeHosted: false, stripeCancelledPayload: null,
+		squareHosted: false, squareHostedActive: null, tyro: null, mpgsHosted: false,
+		checkoutAttemptId: null, checkoutPaymentId: null, paymentAttemptKey: 'synthetic-payment',
+		I18N: {}, payLabel: 'Place order', payLabelFor: () => 'Place order', totals: { total: 33 },
+		crypto, window: { crypto }, onJourneyStep: null,
+		setPaymentMutationLock: locked => lockEvents.push(locked),
+		clearError: node => { node.textContent = ''; },
+		announceError: (node, message) => { node.textContent = message; announcements.push(message); },
+		completeOrder: response => confirmations.push(response),
+		request: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject }))
+	};
+	// Execute the genuine handler and its genuine retry/idempotency helpers in
+	// one shared lexical VM context. Only network and completed-order rendering
+	// are replaced with synthetic recorders; no provider or endpoint is called.
+	ctx.placeOrder = extractFunction(storefront, 'placeOrder', ctx, checkoutSource);
+	ctx.hasCheckoutAttempt = extractFunction(storefront, 'hasCheckoutAttempt', ctx, checkoutSource);
+	ctx.fail = extractFunction(storefront, 'fail', ctx, checkoutSource);
+	ctx.checkoutSubmit = extractFunction(storefront, 'checkoutSubmit', ctx, renamed);
+	return { ctx, requests, confirmations, lockEvents, announcements,
+		submit: () => ctx.checkoutSubmit({ preventDefault() {} }),
+		setCartReady: ready => { cartReady = ready === true; },
+		settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+test('a bare local attempt key cannot bypass stale checkout after an unpaid or hosted-intent failure', async () => {
+	for (const gateway of ['unpaid', 'stripe', 'square']) {
+		const h = checkoutSubmitHarness();
+		h.ctx.paying = gateway !== 'unpaid';
+		h.ctx.stripeHosted = gateway === 'stripe';
+		h.ctx.squareHosted = gateway === 'square';
+		h.ctx.window.location = { href: 'https://example.invalid/checkout' };
+		h.submit();
+		assert.equal(h.requests.length, 1, gateway);
+		assert.equal(h.requests[0].url, gateway === 'unpaid' ? '/checkout' : '/payment-intent');
+		assert.ok(h.ctx.checkoutAttemptId, 'the local key exists before server success');
+		h.setCartReady(false);
+		const failure = new Error('Synthetic pre-dispatch failure');
+		failure.data = { retry_safe: true, payment_pending: false };
+		h.requests[0].reject(failure);
+		await h.settle();
+		assert.equal(h.ctx.submit.disabled, true, 'failure cannot enable a stale attempt: ' + gateway);
+		h.ctx.submit.disabled = false;
+		h.submit();
+		assert.equal(h.requests.length, 1, 'no stale creation request: ' + gateway);
+		h.setCartReady(true);
+		h.submit();
+		assert.equal(h.requests.length, 2, 'authoritative refresh permits retry: ' + gateway);
+		if (gateway === 'unpaid') {
+			assert.equal(h.requests[1].options.headers['Idempotency-Key'], h.requests[0].options.headers['Idempotency-Key']);
+		} else {
+			assert.equal(h.requests[1].options.body.payment_attempt_key, h.requests[0].options.body.payment_attempt_key);
+		}
+		h.requests[1].reject(new Error('Synthetic cleanup'));
+		await h.settle();
+	}
+});
+
+test('core recovery evidence requires a known payment or immutable hosted-session snapshot', () => {
+	const h = checkoutSubmitHarness();
+	h.ctx.checkoutAttemptId = 'local-key-only';
+	assert.equal(h.ctx.hasCheckoutAttempt(), false);
+	for (const name of ['checkoutPaymentId', 'stripeCancelledPayload', 'squareHostedActive']) {
+		h.ctx[name] = name === 'checkoutPaymentId' ? 'known-payment' : { payload: { customer_name: 'Synthetic' } };
+		assert.equal(h.ctx.hasCheckoutAttempt(), true, name);
+		h.ctx[name] = null;
+	}
+});
+
+test('core checkout refuses a stale new submission even if its button is incorrectly enabled, then permits the refreshed cart', async () => {
+	const h = checkoutSubmitHarness({ cartReady: false });
+	h.ctx.submit.disabled = false;
+	h.submit();
+	assert.equal(h.requests.length, 0, 'a stale new submission cannot reach /checkout');
+	assert.deepEqual(h.lockEvents, [], 'a stale new submission cannot acquire the payment lock');
+	assert.equal(h.ctx.form.attributes['aria-busy'], undefined, 'a stale new submission cannot mark the form busy');
+
+	h.setCartReady(true);
+	h.submit();
+	assert.equal(h.requests.length, 1, 'the same form submits once the latest cart read is ready');
+	h.requests[0].resolve({ id: 'synthetic-refreshed-order' });
+	await h.settle();
+	assert.deepEqual(h.confirmations, [{ id: 'synthetic-refreshed-order' }]);
+});
+
+function checkoutCartControlHarness() {
+	const el = (tag, attrs, children) => storefrontCreate(tag, attrs, children);
+	const field = (type, name) => {
+		const input = storefrontElement(type === 'textarea' ? 'textarea' : 'input');
+		input.value = '';
+		const wrapper = storefrontElement('div');
+		wrapper.querySelector = () => input;
+		wrapper.appendChild(input);
+		return wrapper;
+	};
+	const checkoutForm = extractFunction(storefront, 'checkoutForm', {
+		el,
+		field,
+		rememberDetailsControl: () => storefrontElement('div'),
+		I18N: {},
+		PAY: {},
+		window: { crypto: { randomUUID: () => 'checkout-control-key' }, location: { href: 'https://example.test/order' }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } },
+		crypto: { randomUUID: () => 'checkout-control-key' },
+		document: { addEventListener() {}, removeEventListener() {}, body: { contains: () => true } },
+		payingOnline: () => false,
+		stripeHosted: false,
+		squareHosted: false,
+		tyroPay: false,
+		mpgsHosted: false,
+		paymentMutationLock: true,
+		money: amount => '$' + Number(amount || 0).toFixed(2),
+		storedLocationId: () => 1,
+		activeTableContext: () => null,
+		trackCommerce() {},
+		pickupHiddenFields: () => ({}),
+		request: () => Promise.resolve({}),
+		announceError() {},
+		clearError() {},
+		setPaymentMutationLock() {},
+		notifyCartChanged() {},
+		revealNode() {},
+		completeOrder() {}
+	});
+	const checkout = checkoutForm({}, 'pickup', () => 1, { total: 14 }, () => {}, () => {}, null, null);
+	const form = checkout.form;
+	const classes = new Set();
+	form.classList = { toggle: (name, enabled) => { if (enabled) classes.add(name); else classes.delete(name); }, contains: name => classes.has(name) };
+	form.dispatchEvent = event => {
+		const listener = form.listeners[event.type];
+		if (listener) listener(event);
+	};
+	return { checkout, form, classes };
+}
+
+test('setCartReady marks stale state without overwriting active payment recovery controls', () => {
+	const h = checkoutCartControlHarness();
+	const submit = h.form.children.find(node => node.tag === 'button');
+	assert.ok(submit, 'checkout form rendered its actual submit control');
+	submit.disabled = true;
+	submit.textContent = 'Payment confirmation pending';
+	h.checkout.setCartReady(false);
+	assert.equal(h.form.doughbossCartReady(), false);
+	assert.equal(h.form.doughbossCartGuard(), true);
+	assert.equal(h.classes.has('db-checkout--stale'), true);
+	assert.equal(submit.disabled, true);
+	assert.equal(submit.textContent, 'Payment confirmation pending', 'cart refresh state cannot replace an active recovery label');
+
+	h.checkout.setCartReady(true);
+	assert.equal(h.form.doughbossCartReady(), true);
+	assert.equal(h.form.doughbossCartGuard(), false);
+	assert.equal(h.classes.has('db-checkout--stale'), false);
+	assert.equal(submit.textContent, 'Payment confirmation pending', 'a ready refresh cannot replace an active recovery label');
+});
+
+test('checkout blocks pending duplicate submits and reuses the actual idempotency key after failure', async () => {
+	const h = checkoutSubmitHarness();
+	h.submit();
+	assert.equal(h.requests.length, 1);
+	assert.equal(h.requests[0].url, '/checkout');
+	assert.equal(h.requests[0].options.headers['Idempotency-Key'], 'synthetic-checkout-1');
+	assert.equal(h.ctx.submit.disabled, true);
+	assert.equal(h.ctx.form.attributes['aria-busy'], 'true');
+	assert.deepEqual(h.lockEvents, [true]);
+	h.submit();
+	assert.equal(h.requests.length, 1, 'no second request while pending');
+	assert.deepEqual(h.lockEvents, [true], 'duplicate dispatch does not repeat side effects');
+	h.requests[0].reject(new Error('Synthetic network failure'));
+	await h.settle();
+	assert.equal(h.ctx.submit.disabled, false);
+	assert.equal(h.ctx.form.attributes['aria-busy'], 'false');
+	assert.deepEqual(h.lockEvents, [true, false]);
+	assert.deepEqual(h.announcements, ['Synthetic network failure']);
+	h.submit();
+	assert.equal(h.requests.length, 2);
+	assert.equal(h.requests[1].options.headers['Idempotency-Key'], h.requests[0].options.headers['Idempotency-Key'], 'retry preserves server deduplication identity');
+	assert.equal(h.requests[1].options.body.customer_email, 'preview@example.invalid');
+	h.requests[1].resolve({ id: 'synthetic-order' });
+	await h.settle();
+	assert.deepEqual(h.confirmations, [{ id: 'synthetic-order' }]);
+});
+
+test('checkout pickup refusal stays unlocked and a later valid submit is single-flight', async () => {
+	const h = checkoutSubmitHarness();
+	let blocked = true, gateCalls = 0;
+	h.ctx.pickup = { gate: () => { gateCalls++; return blocked; }, recover: () => false };
+	h.submit();
+	assert.equal(h.requests.length, 0);
+	assert.equal(h.ctx.submit.disabled, false);
+	assert.deepEqual(h.lockEvents, []);
+	blocked = false;
+	h.submit();
+	assert.equal(h.requests.length, 1);
+	assert.equal(gateCalls, 2);
+	h.submit();
+	assert.equal(h.requests.length, 1, 'pending replay is ignored before the pickup gate');
+	assert.equal(gateCalls, 2);
+	h.requests[0].resolve({ id: 'synthetic-pickup' });
+	await h.settle();
+	assert.deepEqual(h.confirmations, [{ id: 'synthetic-pickup' }]);
+});
+
+test('post-order feedback waits for completion and final tracking does not promise continued polling', () => {
+	function element(tag, attributes = {}, children = []) {
+		return { tag, attributes, children, appendChild(child) { this.children.push(child); }, setAttribute(key, value) { this.attributes[key] = value; } };
+	}
+	const flatten = node => [node, ...(node.children || []).flatMap(flatten)];
+	for (const status of ['pending', 'confirmed', 'preparing', 'baking', 'ready', 'completed', 'cancelled']) {
+		for (const reviewUrl of ['', 'https://reviews.example.invalid/doughboss']) {
+			const result = element('div');
+			let stops = 0;
+			const context = { result, el: element, DATA: { googleReviewUrl: reviewUrl },
+				buildTracker: () => element('ol'), trackingTime: () => '', pickupTrackingText: () => '',
+				buildEta: () => null, buildPaymentHint: () => element('p'), money: String,
+				stopPolling: () => { stops++; }, pollDone: false, Intl, Date, Number, Math };
+			extractFunction(storefront, 'renderOrder', context)({ status, order_number: 'SYNTHETIC-1', total: 12, items: [] });
+			const nodes = flatten(result);
+			const reviews = nodes.filter(node => node.attributes['data-doughboss-engagement'] === 'review_engagement');
+			assert.equal(reviews.length, status === 'completed' && reviewUrl ? 1 : 0, status + ' / configured=' + !!reviewUrl);
+			if (reviews.length) {
+				assert.equal(reviews[0].attributes.href, reviewUrl);
+				assert.equal(reviews[0].attributes.rel, 'noopener noreferrer');
+				assert.equal(reviews[0].attributes['data-channel'], 'order_completed');
+			}
+			const checked = nodes.find(node => node.attributes.class === 'db-track-checked').attributes.text;
+			const terminal = status === 'completed' || status === 'cancelled';
+			assert.equal(stops, terminal ? 1 : 0);
+			assert.equal(context.pollDone, terminal);
+			assert.match(checked, terminal ? /final order status/ : /updates automatically while this page is open/);
+			if (terminal) assert.doesNotMatch(checked, /updates automatically/);
+		}
+	}
+	const source = fs.readFileSync(storefront, 'utf8');
+	const confirmation = source.slice(source.indexOf('function completeOrder('), source.indexOf('function placeOrder('));
+	assert.doesNotMatch(confirmation, /googleReviewUrl|review_engagement|instagram\.com|social_engagement/);
+	assert.match(confirmation, /Track this order/);
+});
+
+function storefrontReadHarness() {
+	const requests = [];
+	const context = { configCache: null, locationsCache: null, configRequest: null, locationsRequest: null,
+		request(route) {
+			return new Promise((resolve, reject) => { requests.push({ route, resolve, reject }); });
+		}
+	};
+	context.getConfig = extractFunction(storefront, 'getConfig', context);
+	context.getLocations = extractFunction(storefront, 'getLocations', context);
+	return { context, requests, settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+test('tracker failures retain the order and announce retry, while obsolete failures stay silent', async () => {
+	for (const stale of [false, true]) {
+		let rejectRequest;
+		const notices = [];
+		let renders = 0;
+		let schedules = 0;
+		const context = { pollTimer: 9, pollDone: false, pollKey: 'current', pollLookup: { number: 'SYNTHETIC' },
+			request: () => new Promise((resolve, reject) => { rejectRequest = reject; }),
+			renderOrder: () => { renders++; }, setTrackingNotice: message => notices.push(message),
+			scheduleTick: () => { schedules++; } };
+		extractFunction(storefront, 'pollTick', context)();
+		if (stale) context.pollKey = 'newer-order';
+		rejectRequest(new Error('synthetic offline'));
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(renders, 0, 'last confirmed order is not replaced');
+		assert.equal(schedules, stale ? 0 : 1);
+		assert.equal(notices.length, stale ? 0 : 1);
+		if (!stale) assert.match(notices[0], /last confirmed status.*retrying automatically/);
+	}
+});
+
+test('a fresh lookup of the same order rejects obsolete poll success and failure for active and completed orders', async () => {
+	for (const completed of [false, true]) {
+		for (const failure of [false, true]) {
+			let resolveRequest;
+			let rejectRequest;
+			const notices = [];
+			const rendered = [];
+			let schedules = 0;
+			const oldLookup = { number: 'SYNTHETIC', email: 'test@example.invalid' };
+			const context = { pollTimer: 9, pollDone: false, pollKey: 'same-order-and-email', pollLookup: oldLookup,
+				request: (route, options) => {
+					assert.equal(route, '/order/track');
+					assert.equal(options.body, oldLookup);
+					return new Promise((resolve, reject) => { resolveRequest = resolve; rejectRequest = reject; });
+				},
+				renderOrder: order => rendered.push(order), setTrackingNotice: message => notices.push(message),
+				scheduleTick: () => { schedules++; } };
+			extractFunction(storefront, 'pollTick', context)();
+			// Resubmitting identical credentials creates a new lookup object, not a new key.
+			context.pollLookup = { ...oldLookup };
+			context.pollDone = completed;
+			if (failure) rejectRequest(new Error('obsolete synthetic failure'));
+			else resolveRequest({ status: 'preparing' });
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(rendered.length, 0, 'an obsolete success cannot replace the newer order');
+			assert.equal(notices.length, 0, 'an obsolete failure cannot replace the newer notice');
+			assert.equal(schedules, 0, 'an obsolete result cannot restart or duplicate polling');
+			assert.equal(context.pollDone, completed);
+		}
+	}
+});
+
+test('tracker session expiry gives a refresh instruction and schedules no more requests', () => {
+	const notices = [];
+	let scheduled = 0;
+	const context = { pollDone: false, pollKey: 'current', pollLookup: {}, document: { hidden: false },
+		pollStarted: 0, POLL_MAX_MS: 7200000, POLL_MS: 15000, Date: { now: () => 7200000 },
+		stopPolling: () => {}, setTrackingNotice: message => notices.push(message),
+		setTimeout: () => { scheduled++; } };
+	const schedule = extractFunction(storefront, 'scheduleTick', context);
+	schedule();
+	assert.equal(context.pollDone, true);
+	assert.equal(scheduled, 0);
+	assert.match(notices[0], /Check live status again/);
+	schedule();
+	assert.equal(notices.length, 1, 'terminal session stays stopped');
+});
+
+test('tracking notice updates existing status text without injecting markup or replacing order details', () => {
+	const notice = { textContent: '', attributes: {}, setAttribute(key, value) { this.attributes[key] = value; } };
+	const setNotice = extractFunction(storefront, 'setTrackingNotice', { result: { querySelector: () => notice } });
+	setNotice('Synthetic <status>');
+	assert.equal(notice.textContent, 'Synthetic <status>');
+	assert.equal(notice.attributes.role, 'status');
+	assert.doesNotThrow(() => extractFunction(storefront, 'setTrackingNotice', { result: { querySelector: () => null } })('Synthetic'));
+});
+
+test('concurrent storefront reads share requests and retain single-shop normalisation and completed caches', async () => {
+	const { context, requests, settle } = storefrontReadHarness();
+	const config = context.getConfig();
+	const locations = context.getLocations();
+	for (let caller = 0; caller < 4; caller++) {
+		assert.equal(context.getConfig(), config, 'concurrent config caller shares the same promise');
+		assert.equal(context.getLocations(), locations, 'concurrent location caller shares the same promise');
+	}
+	assert.deepEqual(requests.map(request => request.route), ['/config', '/locations']);
+	const shops = [{ id: 1 }, { id: 2 }];
+	requests[1].resolve(shops);
+	await settle();
+	assert.equal(requests.length, 2, 'location normalisation reuses the pending config read');
+	assert.equal(context.locationsCache, null, 'shops are not cached before config authority resolves');
+	const cfg = { single_location_mode: true, enable_delivery: true, ordering_open: false, payments_enabled: false };
+	requests[0].resolve(cfg);
+	assert.equal(await config, cfg);
+	assert.equal(cfg.enable_delivery, false, 'existing pickup-only display normalisation remains');
+	const result = await locations;
+	assert.deepEqual(result, [{ id: 1 }]);
+	assert.equal(shops.length, 2, 'the fetched location list is not mutated');
+	assert.equal(await context.getConfig(), cfg);
+	assert.equal(await context.getLocations(), result);
+	assert.equal(requests.length, 2, 'completed reads retain the existing same-page cache');
+	assert.equal(context.configRequest, null);
+	assert.equal(context.locationsRequest, null);
+	assert.equal(cfg.ordering_open, false); assert.equal(cfg.payments_enabled, false);
+});
+
+test('failed shared config reads reject every caller and allow a single fresh retry', async () => {
+	const { context, requests } = storefrontReadHarness();
+	const first = context.getConfig();
+	const second = context.getConfig();
+	const failures = Promise.allSettled([first, second]);
+	const error = new Error('config unavailable');
+	requests[0].reject(error);
+	for (const result of await failures) {
+		assert.equal(result.status, 'rejected'); assert.equal(result.reason, error);
+	}
+	assert.equal(context.configCache, null); assert.equal(context.configRequest, null);
+	const retry = context.getConfig();
+	assert.notEqual(retry, first); assert.equal(context.getConfig(), retry);
+	assert.equal(requests.length, 2);
+	const cfg = { single_location_mode: false, enable_delivery: true };
+	requests[1].resolve(cfg);
+	assert.equal(await retry, cfg);
+	assert.equal(cfg.enable_delivery, true, 'multi-shop configuration is unchanged');
+	assert.equal(await context.getConfig(), cfg); assert.equal(requests.length, 2);
+});
+
+test('failed shared location fetches remain retryable and empty results still use the existing cache', async () => {
+	const { context, requests, settle } = storefrontReadHarness();
+	const first = context.getLocations();
+	const failures = Promise.allSettled([first, context.getLocations()]);
+	const error = new Error('locations unavailable');
+	requests[0].reject(error);
+	for (const result of await failures) {
+		assert.equal(result.status, 'rejected'); assert.equal(result.reason, error);
+	}
+	assert.equal(context.locationsCache, null); assert.equal(context.locationsRequest, null);
+	assert.equal(requests.length, 1, 'failed location fetch does not start a config read');
+	const retry = context.getLocations();
+	assert.equal(context.getLocations(), retry);
+	requests[1].resolve(null);
+	await settle();
+	assert.equal(requests[2].route, '/config');
+	requests[2].resolve({ single_location_mode: false });
+	const empty = await retry;
+	assert.equal(empty.length, 0, 'non-array payload normalisation remains unchanged');
+	assert.equal(await context.getLocations(), empty);
+	assert.equal(requests.length, 3, 'an empty completed array is cached, not repeatedly fetched');
+});
+
+test('a config failure during location normalisation clears both pending reads without caching unverified shops', async () => {
+	const { context, requests, settle } = storefrontReadHarness();
+	const first = context.getLocations();
+	const failures = Promise.allSettled([first, context.getLocations()]);
+	requests[0].resolve([{ id: 1 }, { id: 2 }]);
+	await settle();
+	assert.equal(requests[1].route, '/config');
+	const error = new Error('config failed after locations');
+	requests[1].reject(error);
+	for (const result of await failures) {
+		assert.equal(result.status, 'rejected'); assert.equal(result.reason, error);
+	}
+	assert.equal(context.configCache, null); assert.equal(context.locationsCache, null);
+	assert.equal(context.configRequest, null); assert.equal(context.locationsRequest, null);
+	const retry = context.getLocations();
+	assert.notEqual(retry, first); assert.equal(context.getLocations(), retry);
+	assert.equal(requests[2].route, '/locations', 'retry re-reads locations instead of caching a partial result');
+	const refreshed = [{ id: 3 }, { id: 4 }];
+	requests[2].resolve(refreshed);
+	await settle();
+	assert.equal(requests[3].route, '/config');
+	requests[3].resolve({ single_location_mode: false });
+	assert.equal(await retry, refreshed, 'multi-shop config keeps all refreshed shops');
+	assert.equal(requests.length, 4);
+});
+
+function storefrontElement(tag = 'div') {
+	const node = {
+		tag,
+		children: [],
+		attributes: {},
+		className: '',
+		textContent: '',
+		parentNode: null,
+		listeners: {},
+		style: { setProperty() {} },
+		classList: { add() {}, remove() {}, toggle() {} },
+		addEventListener(type, callback) {
+			this.listeners[type] = callback;
+		},
+		getBoundingClientRect() {
+			return { top: 0, bottom: 64, height: 64 };
+		},
+		removeAttribute(key) {
+			delete this.attributes[key];
+		},
+		appendChild(child) {
+			child.parentNode = this;
+			this.children.push(child);
+			return child;
+		},
+		removeChild(child) {
+			this.children.splice(this.children.indexOf(child), 1);
+			child.parentNode = null;
+		},
+		setAttribute(key, value) {
+			this.attributes[key] = String(value);
+		},
+		getAttribute(key) {
+			return this.attributes[key] || null;
+		},
+		querySelector(selector) {
+			const match = /^\[([^\]]+)\]$/.exec(selector);
+			if (!match) return null;
+			const key = match[1];
+			for (const child of this.children) {
+				if (Object.hasOwn(child.attributes, key)) return child;
+				const descendant = child.querySelector(selector);
+				if (descendant) return descendant;
+			}
+			return null;
+		}
+	};
+	Object.defineProperty(node, 'innerHTML', {
+		set() {
+			node.children.forEach(child => { child.parentNode = null; });
+			node.children = [];
+		}
+	});
+	return node;
+}
+
+function storefrontCreate(tag, attrs, children) {
+	const node = storefrontElement(tag);
+	for (const [key, value] of Object.entries(attrs || {})) {
+		if (key === 'class') node.className = value;
+		else if (key === 'text') node.textContent = value;
+		else if (key === 'id') node.id = value;
+		else node.setAttribute(key, value);
+	}
+	for (const child of children || []) node.appendChild(child);
+	return node;
+}
+
+function mobileCustomizerHarness() {
+	const documentEvents = {};
+	const windowEvents = {};
+	const timers = [];
+	const pendingToggles = new Set();
+	const focused = [];
+	let mobile = false;
+	let document;
+	function element(tag, attrs, children) {
+		const node = storefrontCreate(tag, attrs, []);
+		const classes = new Set();
+		node.classList = { add: (...names) => names.forEach(name => classes.add(name)), remove: (...names) => names.forEach(name => classes.delete(name)), contains: name => classes.has(name) };
+		node.hasAttribute = key => Object.hasOwn(node.attributes, key);
+		node.appendChild = child => {
+			if (child.parentNode) child.parentNode.removeChild(child);
+			child.parentNode = node;
+			node.children.push(child);
+			return child;
+		};
+		node.focus = () => {
+			for (let ancestor = node; ancestor; ancestor = ancestor.parentNode) {
+				if (ancestor.hasAttribute('inert')) return;
+			}
+			document.activeElement = node;
+			focused.push(node);
+		};
+		(children || []).forEach(child => node.appendChild(child));
+		return node;
+	}
+	const body = element('body');
+	const header = element('header');
+	const priorInert = element('aside', { inert: 'inert' });
+	const main = element('main');
+	const footer = element('footer');
+	[header, priorInert, main, footer].forEach(node => body.appendChild(node));
+	const detailsList = [];
+	function details() {
+		const summary = element('summary');
+		const close = element('button', { class: 'db-customizer-close' });
+		const panel = element('div', { class: 'db-menu-options' }, [close]);
+		const node = element('details', {}, [summary, panel]);
+		let open = false;
+		Object.defineProperty(node, 'open', {
+			get: () => open,
+			set: value => {
+				value = !!value;
+				if (value !== open) { open = value; pendingToggles.add(node); }
+			}
+		});
+		node.querySelector = selector => selector === 'summary' ? summary : (selector === '.db-menu-options' ? panel : null);
+		panel.querySelector = selector => selector === '.db-customizer-close' ? close : null;
+		panel.querySelectorAll = () => [close];
+		main.appendChild(node);
+		detailsList.push(node);
+		return { node, panel, close, summary };
+	}
+	document = { body, activeElement: body, addEventListener: (name, callback) => { documentEvents[name] = callback; },
+		querySelectorAll: () => detailsList.filter(node => node.open) };
+	const context = vm.createContext({
+		document,
+		window: { matchMedia: () => ({ matches: mobile }), addEventListener: (name, callback) => { windowEvents[name] = callback; } },
+		HTMLElement: { prototype: { inert: false } },
+		el: element,
+		setTimeout: callback => { timers.push(callback); },
+		revealNode: node => node.focus()
+	});
+	const source = fs.readFileSync(storefront, 'utf8');
+	const start = source.indexOf('var activeMobileCustomizer = null;');
+	const end = source.indexOf('// Use packaged responsive candidates', start);
+	assert.ok(start >= 0 && end > start);
+	vm.runInContext(source.slice(start, end), context);
+	const toggleRegistration = source.match(/details\.addEventListener\('toggle', function \(\) \{[\s\S]*?\n\t\t\t\}\);/);
+	assert.ok(toggleRegistration, 'execute the actual card toggle listener');
+	function createDetails() {
+		const item = details();
+		context.testDetails = item.node;
+		vm.runInContext('(function (details) {' + toggleRegistration[0] + '})(testDetails);', context);
+		return item;
+	}
+	return { body, header, priorInert, main, footer, focused, context, element, createDetails,
+		resize(value) { mobile = value; windowEvents.resize(); },
+		escape() { documentEvents.keydown({ key: 'Escape', preventDefault() {} }); },
+		flushToggles() {
+			while (pendingToggles.size) {
+				const batch = [...pendingToggles];
+				pendingToggles.clear();
+				batch.forEach(node => node.listeners.toggle());
+			}
+		},
+		flushTimers() { while (timers.length) timers.shift()(); },
+		assertReleased() {
+			for (const node of [header, main, footer]) assert.equal(node.hasAttribute('inert'), false);
+			assert.equal(priorInert.getAttribute('inert'), 'inert', 'preexisting inert must be preserved exactly');
+			assert.equal(body.classList.contains('db-customizer-open'), false);
+			assert.equal(context.activeMobileCustomizer, null);
+		}
+	};
+}
+
+test('repeated mobile customiser activation retains original inert ownership and restores focus on Escape', () => {
+	const h = mobileCustomizerHarness();
+	const item = h.createDetails();
+	h.resize(true);
+	item.node.open = true;
+	h.flushToggles();
+	const originalEntries = h.context.customizerInertNodes.length;
+	h.context.activateMobileCustomizer(item.node);
+	h.context.activateMobileCustomizer(item.node);
+	assert.equal(h.context.customizerInertNodes.length, originalEntries, 'repeat activation does not overwrite or duplicate the original snapshot');
+	assert.equal(h.header.hasAttribute('inert'), true);
+	const lateNode = h.element('section');
+	h.body.appendChild(lateNode);
+	h.context.activateMobileCustomizer(item.node);
+	assert.equal(lateNode.hasAttribute('inert'), true, 'new background nodes are isolated without losing earlier ownership');
+	h.flushTimers();
+	assert.equal(h.focused.at(-1), item.close);
+	h.escape();
+	h.flushToggles();
+	h.assertReleased();
+	assert.equal(lateNode.hasAttribute('inert'), false);
+	assert.equal(item.panel.parentNode, item.node);
+	assert.equal(h.focused.at(-1), item.summary, 'restored background accepts focus instead of leaving BODY active');
+	h.context.releaseMobileCustomizer(item.node, true);
+	h.assertReleased();
+});
+
+test('queued toggle plus responsive activation, dialog switching and rotation release only customiser-owned inert', () => {
+	const h = mobileCustomizerHarness();
+	const first = h.createDetails();
+	const second = h.createDetails();
+	first.node.open = true;
+	h.resize(true); // Resize activates the open details before its native queued toggle fires.
+	h.flushToggles(); // The same details activates again through its actual toggle handler.
+	h.resize(false);
+	h.flushTimers();
+	h.assertReleased();
+	assert.equal(first.panel.parentNode, first.node);
+	assert.equal(h.focused.at(-1), first.summary, 'stale mobile focus callback cannot take focus after desktop restoration');
+	h.resize(true);
+	second.node.open = true;
+	h.flushToggles(); // Switching also queues the previous details close event.
+	assert.equal(first.node.open, false);
+	assert.equal(h.context.activeMobileCustomizer, second.node);
+	assert.equal(first.panel.parentNode, first.node);
+	assert.equal(second.panel.parentNode, h.body);
+	h.flushTimers();
+	assert.equal(h.focused.at(-1), second.close, 'only the current dialog receives delayed focus');
+	h.escape();
+	h.flushToggles();
+	h.flushTimers();
+	h.assertReleased();
+	assert.equal(h.focused.at(-1), second.summary);
+	assert.equal(second.panel.parentNode, second.node);
+	h.context.activateMobileCustomizer(second.node);
+	h.assertReleased(); // A stale activation of closed details must not relock the page.
+});
+
+
+function cartFabHarness({ remote = false, observer = true, heading = true, control = true, reducedMotion = false } = {}) {
+	const nodes = [];
+	function node(tag, attrs, children) {
+		const element = storefrontCreate(tag, attrs, children);
+		const classes = new Set(String(element.className || '').split(' ').filter(Boolean));
+		element.classList = { add: (...names) => names.forEach(name => classes.add(name)), remove: (...names) => names.forEach(name => classes.delete(name)), contains: name => classes.has(name) };
+		element.focus = options => { focused.push({ element, options }); };
+		nodes.push(element);
+		return element;
+	}
+	const focused = [];
+	const root = node('div');
+	if (remote) root.setAttribute('data-cart-url', '/separate-cart/');
+	const cartRoot = node('section');
+	const title = node('h2');
+	const decrement = node('button');
+	cartRoot.querySelector = selector => selector.startsWith('h1,') ? (heading ? title : null) : (control ? decrement : null);
+	const scrolls = [];
+	cartRoot.scrollIntoView = options => {
+		assert.equal(root.classList.contains('db-menu--checkout-navigation'), true, 'deferred menu geometry is pinned before selecting the cart scroll destination');
+		scrolls.push(options);
+	};
+	const events = {};
+	const requests = [];
+	const observations = [];
+	let observeCallback;
+	const window = { matchMedia: () => ({ matches: reducedMotion }) };
+	if (observer) {
+		window.IntersectionObserver = function (callback) {
+			observeCallback = callback;
+			this.observe = target => observations.push(target);
+		};
+	}
+	const context = { window, document: { querySelector: () => cartRoot, addEventListener: (name, callback) => { events[name] = callback; } },
+		el: node, I18N: {}, lastCartItemCount: 0,
+		cartItemCount: cart => cart.count, money: value => '$' + value,
+		request: route => new Promise((resolve, reject) => requests.push({ route, resolve, reject }))
+	};
+	extractFunction(storefront, 'initCartFab', context)(root);
+	const fab = nodes.find(element => element.className === 'db-cart-fab');
+	return { root, cartRoot, title, decrement, fab, events, requests, focused, scrolls, observations,
+		intersect(visible, target = cartRoot) { observeCallback([{ target, isIntersecting: visible }]); },
+		async reply(index, count) { requests[index].resolve({ count, totals: { total: 12 } }); await new Promise(resolve => setImmediate(resolve)); }
+	};
+}
+
+test('cart cue follows actual cart visibility and latest server count without observer requests or padding churn', async () => {
+	const h = cartFabHarness();
+	assert.deepEqual(h.observations, [h.cartRoot]);
+	assert.equal(h.requests.length, 1);
+	assert.equal(h.requests[0].route, '/cart');
+	await h.reply(0, 2);
+	assert.equal(h.fab.classList.contains('is-shown'), true);
+	assert.equal(h.root.classList.contains('db-menu--has-cart-fab'), true);
+	h.intersect(true);
+	assert.equal(h.fab.classList.contains('is-shown'), false);
+	assert.equal(h.root.classList.contains('db-menu--has-cart-fab'), true, 'hiding the cue must not move the cart by removing menu padding');
+	assert.equal(h.requests.length, 1, 'intersection does not fetch the cart');
+	h.events['doughboss:cart-updated']();
+	await h.reply(1, 3);
+	assert.equal(h.fab.classList.contains('is-shown'), false, 'count refresh cannot overlay a visible cart');
+	h.intersect(false);
+	assert.equal(h.fab.classList.contains('is-shown'), true);
+	assert.equal(h.requests.length, 2);
+	h.events['doughboss:cart-updated']();
+	await h.reply(2, 0);
+	h.intersect(true);
+	h.intersect(false);
+	assert.equal(h.fab.classList.contains('is-shown'), false, 'an empty server cart cannot be resurrected by visibility');
+	assert.equal(h.root.classList.contains('db-menu--has-cart-fab'), false);
+	h.events['doughboss:cart-updated']();
+	await h.reply(3, 1);
+	h.events['doughboss:cart-updated']();
+	h.requests[4].reject(new Error('synthetic unavailable'));
+	await new Promise(resolve => setImmediate(resolve));
+	h.intersect(true);
+	h.intersect(false);
+	assert.equal(h.fab.classList.contains('is-shown'), false, 'failed reads remain fail-closed');
+	assert.equal(h.events.scroll, undefined, 'no document scroll listener is added');
+});
+
+test('View cart keyboard activation focuses the cart heading rather than quantity controls', async () => {
+	const h = cartFabHarness({ reducedMotion: true });
+	await h.reply(0, 1);
+	let prevented = false;
+	h.fab.listeners.click({ preventDefault() { prevented = true; } });
+	assert.equal(prevented, true);
+	assert.equal(h.scrolls[0].block, 'start');
+	assert.equal(h.scrolls[0].behavior, 'auto');
+	assert.equal(h.title.getAttribute('tabindex'), '-1');
+	assert.equal(h.focused[0].element, h.title);
+	assert.equal(h.focused[0].options.preventScroll, true);
+	assert.notEqual(h.focused[0].element, h.decrement);
+	const fallback = cartFabHarness({ heading: false, observer: false });
+	await fallback.reply(0, 1);
+	fallback.fab.listeners.click({ preventDefault() {} });
+	assert.equal(fallback.focused[0].element, fallback.decrement, 'legacy safe-control fallback remains');
+	assert.equal(fallback.scrolls[0].behavior, 'smooth');
+	assert.equal(fallback.fab.classList.contains('is-shown'), true, 'missing IntersectionObserver preserves the cue');
+	const noTarget = cartFabHarness({ heading: false, control: false });
+	assert.doesNotThrow(() => noTarget.fab.listeners.click({ preventDefault() {} }));
+});
+
+test('a separate cart URL keeps native navigation and is not hidden by an unrelated on-page cart', async () => {
+	const h = cartFabHarness({ remote: true });
+	await h.reply(0, 1);
+	assert.equal(h.fab.getAttribute('href'), '/separate-cart/');
+	assert.equal(h.fab.listeners.click, undefined);
+	assert.deepEqual(h.observations, []);
+	assert.equal(h.fab.classList.contains('is-shown'), true);
+	assert.equal(h.root.classList.contains('db-menu--has-cart-fab'), true);
+});
+
+
+function responsiveMenuItem() {
+	const prefix = 'https://example.test/plugin/public/images/';
+	return {
+		name: 'Spinach Pie & cheese', image: prefix + 'menu/real-v1/spinach-pie.jpg',
+		image_responsive: {
+			original: prefix + 'menu/real-v1/spinach-pie.jpg', width: 1080, height: 864,
+			sources: ['avif', 'webp'].map(format => ({ type: 'image/' + format,
+				srcset: [480, 800].map(width => `${prefix}responsive/spinach-pie-${width}.${format} ${width}w`).join(', ') }))
+		}
+	};
+}
+
+test('menu photographs deliver local responsive sources and a dimensioned original fallback', () => {
+	const menuPhoto = extractFunction(storefront, 'menuPhoto', { el: storefrontCreate });
+	const item = responsiveMenuItem();
+	const photo = menuPhoto(item);
+	assert.equal(photo.attributes.style, undefined, 'no parallel original CSS background download');
+	assert.equal(photo.className, 'db-card-img');
+	assert.equal(photo.children[0].tag, 'picture');
+	const [avif, webp, image] = photo.children[0].children;
+	assert.equal(avif.attributes.type, 'image/avif');
+	assert.equal(webp.attributes.type, 'image/webp');
+	assert.equal(avif.attributes.srcset, item.image_responsive.sources[0].srcset);
+	assert.match(avif.attributes.sizes, /max-width: 640px\) 84px/, 'all phone rows request their compact thumbnail width');
+	assert.match(avif.attributes.sizes, /max-width: 1099px\) 50vw/, 'standard phone and tablet grids describe two columns');
+	assert.match(avif.attributes.sizes, /440px$/, 'capped desktop grid avoids oversized source selection');
+	assert.equal(image.tag, 'img');
+	assert.equal(image.attributes.src, item.image);
+	assert.equal(image.attributes.alt, item.name);
+	assert.equal(image.attributes.width, '1080');
+	assert.equal(image.attributes.height, '864');
+	assert.equal(image.attributes.loading, 'lazy');
+	assert.equal(image.attributes.decoding, 'async');
+	const drink = menuPhoto({ name: 'Coke 600ml', category: 'Drinks', image: '/plugin/public/images/menu/brand-v1/coca-cola-classic-600ml.jpg' });
+	assert.equal(drink.attributes['data-category'], 'drinks', 'bottle media is identified without changing food photos');
+	assert.equal(drink.children[0].children[0].attributes.alt, 'Coke 600ml');
+	assert.equal(drink.children[0].children[0].attributes.loading, 'lazy');
+	const menuCss = fs.readFileSync(path.join(__dirname, '../public/css/doughboss.css'), 'utf8');
+	assert.match(menuCss, /\.db-card-img\[data-category='drinks'\] \.db-menu-picture > img\s*\{[^}]*object-fit:\s*contain;/, 'whole bottles are not cropped like food');
+	const illustration = menuPhoto({ name: 'Half Meat & Cheese', category: 'Manoush', image: '/plugin/public/images/menu/generated-v1/half-meat-cheese.webp' });
+	assert.equal(illustration.attributes['data-generated-illustration'], 'true');
+	assert.equal(illustration.children.length, 1, 'owner-requested visual badge is not emitted');
+	assert.match(illustration.children[0].children[0].attributes.alt, /AI-generated illustration/);
+	assert.equal(drink.children.length, 1, 'authentic drink photographs receive no AI badge');
+	assert.equal(menuPhoto({ name: 'Upload', image: '/uploads/generated-v1/unrelated.webp' }).children.length, 1, 'unrelated upload is not guessed to be generated');
+	const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../public/images/responsive/manifest.json'), 'utf8'));
+	const newPaths = Object.keys(manifest.images).filter(path => /^menu\/(brand-v1|generated-v1)\//.test(path));
+	assert.equal(newPaths.length, 14, 'all fourteen brand and illustrated originals are exercised through the actual renderer');
+	for (const path of newPaths) {
+		const entry = manifest.images[path];
+		const prefix = 'https://example.test/plugin/public/images/';
+		const original = prefix + path;
+		const sources = ['avif', 'webp'].filter(format => entry.sources[format].length).map(format => ({
+			type: 'image/' + format, srcset: entry.sources[format].map(variant => prefix + variant.file + ' ' + variant.width + 'w').join(', ')
+		}));
+		const media = menuPhoto({ name: 'Exact selected item', category: path.includes('brand-v1') ? 'Drinks' : 'Manoush', image: original,
+			image_responsive: { original, width: entry.width, height: entry.height, sources } });
+		const picture = media.children[0];
+		assert.equal(picture.children.length, sources.length + 1, 'valid manifest candidates do not silently fall back: ' + path);
+		assert.equal(picture.children.at(-1).attributes.src, original, 'original fallback identity retained');
+		assert.match(picture.children[0].attributes.srcset, /-168\./, 'small phone variant reaches the DOM');
+		assert.equal(media.children.length, 1, 'brand and generated images have no visual provenance overlay');
+	}
+});
+
+test('menu photographs retain originals for absent, unrelated or malformed candidates', () => {
+	const menuPhoto = extractFunction(storefront, 'menuPhoto', { el: storefrontCreate });
+	const mutations = [
+		item => { delete item.image_responsive; },
+		item => { item.image_responsive = null; },
+		item => { item.image = 'https://uploads.example.test/featured.jpg'; },
+		item => { item.image_responsive.original += '?changed'; },
+		item => { item.image_responsive.width = '1080'; },
+		item => { item.image_responsive.height = 0; },
+		item => { item.image_responsive.sources = []; },
+		item => { item.image_responsive.sources = [null]; },
+		item => { item.image_responsive.sources[0].type = 'image/svg+xml'; },
+		item => { item.image_responsive.sources[1].type = 'image/avif'; },
+		item => { item.image_responsive.sources[0].srcset = ''; },
+		item => { item.image_responsive.sources[0].srcset = 42; },
+		item => { item.image_responsive.sources[0].srcset = 'https://other.example.test/public/images/responsive/spinach-pie-480.avif 480w'; },
+		item => { item.image_responsive.sources[0].srcset = 'https://example.test/plugin/public/images/responsive/../private-480.avif 480w'; },
+		item => { item.image_responsive.sources[0].srcset = 'https://example.test/plugin/public/images/responsive/spinach-pie-480.webp 480w'; },
+		item => { item.image_responsive.sources[0].srcset = 'https://example.test/plugin/public/images/responsive/spinach-pie-480.avif 800w'; },
+		item => { item.image_responsive.width = 479; },
+		item => { item.image_responsive.sources[0].srcset += ', https://example.test/plugin/public/images/responsive/spinach-pie-480.avif 480w'; },
+		item => { item.image_responsive.sources[0].srcset += ', '; }
+	];
+	for (const mutate of mutations) {
+		const item = responsiveMenuItem();
+		mutate(item);
+		const photo = menuPhoto(item);
+		assert.equal(photo.attributes.style, undefined, 'fallback does not trigger a parallel CSS image download');
+		assert.equal(photo.children.length, 1);
+		const picture = photo.children[0];
+		assert.equal(picture.tag, 'picture');
+		assert.equal(picture.className, 'db-menu-picture');
+		assert.equal(picture.children.length, 1, 'invalid data never partly adds responsive sources');
+		const image = picture.children[0];
+		assert.equal(image.tag, 'img');
+		assert.equal(image.attributes.src, item.image, 'original delivery is preserved');
+		assert.equal(image.attributes.alt, item.name);
+		assert.equal(image.attributes.loading, 'lazy');
+		assert.equal(image.attributes.decoding, 'async');
+		assert.equal(image.attributes.width, undefined, 'invalid dimensions are not retained');
+		assert.equal(image.attributes.height, undefined, 'invalid dimensions are not retained');
+	}
+});
+
+// These excerpt tests model an unselected shop and a browser without SVG DOM
+// support. Keep the current rendering helpers real rather than omitting them.
+function menuBrowserContext() {
+	const context = {
+		getLocations: () => Promise.resolve([]),
+		menuLocationId: () => 0,
+		el: storefrontCreate,
+		document: { addEventListener() {} }
+	};
+	for (const name of ['svgIcon', 'compactMenuCategory', 'syncPhoneOrderBar', 'watchMenuAvailability']) {
+		context[name] = extractFunction(storefront, name, context);
+	}
+	return context;
+}
+
+function menuEnhancementHarness(overrides = {}) {
+	const root = storefrontElement();
+	const fallback = storefrontCreate('div', { 'data-doughboss-menu-fallback': '' });
+	const browseItem = storefrontCreate('li', { text: 'Published browse-only item $4.50' });
+	fallback.appendChild(browseItem);
+	root.appendChild(fallback);
+	const showMenuFallbackError = extractFunction(storefront, 'showMenuFallbackError', { I18N: {}, el: storefrontCreate });
+	const context = {
+		...menuBrowserContext(),
+		Promise,
+		request: () => Promise.resolve(overrides.items || [{ name: 'Zaatar', category: 'Manoush' }]),
+		getConfig: () => Promise.resolve({ ordering_open: false }),
+		activeTableContext: () => null,
+		el: storefrontCreate,
+		I18N: {},
+		catId: extractFunction(storefront, 'catId'),
+		menuCard: item => storefrontCreate('article', { class: 'db-card', text: item.name }),
+		initCartFab() {},
+		window: { addEventListener() {}, location: { hash: '' }, scrollY: 0 },
+		showMenuFallbackError,
+		...overrides
+	};
+	const render = extractFunction(storefront, 'renderMenu', context);
+	return { root, fallback, browseItem, render: () => render(root), settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+function categoryNavigationHarness(hash = '') {
+	const events = [];
+	const h = menuEnhancementHarness({
+		items: [{ name: 'Sample food', category: 'Manoush' }, { name: 'Sample drink', category: 'Drinks' }],
+		window: { addEventListener() {}, location: { hash }, scrollY: 0, matchMedia: () => ({ matches: true }) },
+		el: (tag, attrs, children) => {
+			const node = storefrontCreate(tag, attrs, children);
+			if (tag === 'h2') node.scrollIntoView = () => events.push('scroll:' + node.id);
+			return node;
+		}
+	});
+	h.root.classList.add = name => events.push('stable:' + name);
+	Object.defineProperty(h.root, 'offsetHeight', { get() { events.push('layout'); return 640; } });
+	const query = h.root.querySelector.bind(h.root);
+	h.root.querySelector = selector => selector.startsWith('#') ? h.root.children.find(node => node.id === selector.slice(1)) || null : query(selector);
+	const descendants = node => [node, ...node.children.flatMap(descendants)];
+	return { ...h, events, categoryButton: name => descendants(h.root).find(node => node.className === 'db-jump' && node.textContent === name) };
+}
+
+test('first category tap settles deferred menu heights before measuring its scroll destination', async () => {
+	const h = categoryNavigationHarness();
+	h.render(); await h.settle();
+	assert.deepEqual(h.events, [], 'initial manual browsing keeps deferred grids');
+	const button = h.categoryButton('Drinks');
+	assert.ok(button);
+	button.listeners.click();
+	assert.deepEqual(h.events, ['stable:db-menu--checkout-navigation', 'layout', 'scroll:db-cat-drinks']);
+});
+
+test('direct category hash settles deferred menu heights before scrolling once', async () => {
+	const h = categoryNavigationHarness('#drinks');
+	h.render(); await h.settle();
+	assert.deepEqual(h.events, ['stable:db-menu--checkout-navigation', 'layout', 'scroll:db-cat-drinks']);
+});
+
+test('non-empty menu enhancement supports prototype-named WordPress categories', async () => {
+	const categories = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'Manoush'];
+	const harness = menuEnhancementHarness({ items: categories.map((category, index) => ({ name: 'Item ' + index, category })) });
+	harness.render();
+	await harness.settle();
+	assert.equal(harness.root.querySelector('[data-doughboss-menu-fallback]'), null, 'successful non-empty enhancement replaces the browse fallback');
+	const headings = harness.root.children.filter(child => child.className === 'db-category');
+	const grids = harness.root.children.filter(child => child.className === 'db-grid');
+	assert.deepEqual(headings.map(heading => heading.textContent).sort(), categories.slice().sort());
+	assert.equal(grids.length, categories.length);
+	assert.deepEqual(grids.flatMap(grid => grid.children.map(card => card.textContent)).sort(), categories.map((category, index) => 'Item ' + index).sort());
+	assert.equal(harness.root.getAttribute('data-ordering-open'), 'false');
+});
+
+test('menu restores the original browse fallback after a late card-rendering failure', async () => {
+	let cardsRendered = 0;
+	const harness = menuEnhancementHarness({
+		items: [{ name: 'First item', category: 'Manoush' }, { name: 'Second item', category: 'Manoush' }],
+		getConfig: () => Promise.resolve({ ordering_open: true }),
+		// 2.51 renders cards only after shop selection. Exercise the intended
+		// late-render failure with a selected shop, not the store-first gate.
+		getLocations: () => Promise.resolve([{ id: 1, name: 'Synthetic shop' }]),
+		menuLocationId: () => 1,
+		menuCard: item => {
+			cardsRendered += 1;
+			if (cardsRendered === 2) throw new Error('late card rendering failure');
+			return storefrontCreate('article', { class: 'db-card', text: item.name });
+		}
+	});
+	harness.render();
+	await harness.settle();
+	assert.equal(cardsRendered, 2, 'the fault occurs after enhancement has already started');
+	assert.deepEqual(harness.root.children, [harness.fallback], 'partial interactive content is removed');
+	assert.equal(harness.fallback.children[0], harness.browseItem, 'the original server-rendered content survives');
+	assert.ok(harness.fallback.querySelector('[data-doughboss-menu-availability]'));
+	assert.equal(harness.root.getAttribute('data-ordering-open'), 'false', 'failed enhancement cannot leave an enabled ordering surface');
+});
+
+test('menu restores browse content when the last enhancement step fails', async () => {
+	let reachedFinalStep = false;
+	const harness = menuEnhancementHarness({
+		initCartFab() { reachedFinalStep = true; throw new Error('cart cue initialization failed'); }
+	});
+	harness.render();
+	await harness.settle();
+	assert.equal(reachedFinalStep, true);
+	assert.deepEqual(harness.root.children, [harness.fallback]);
+	assert.equal(harness.fallback.children[0], harness.browseItem);
+	assert.ok(harness.fallback.querySelector('[data-doughboss-menu-availability]'));
+});
+
+test('failed config reads keep browse content and a missing fallback is described honestly', async () => {
+	const harness = menuEnhancementHarness({ getConfig: () => Promise.reject(new Error('config unavailable')) });
+	harness.render();
+	await harness.settle();
+	assert.equal(harness.root.querySelector('[data-doughboss-menu-fallback]'), harness.fallback);
+	assert.equal(harness.fallback.children[0], harness.browseItem);
+	const rootWithoutFallback = storefrontElement();
+	const showError = extractFunction(storefront, 'showMenuFallbackError', { I18N: {}, el: storefrontCreate });
+	showError(rootWithoutFallback, new Error('unavailable'));
+	assert.doesNotMatch(rootWithoutFallback.children[0].textContent, /browse.*below/i);
+	assert.match(rootWithoutFallback.children[0].textContent, /contact the shop/i);
+});
+
+test('menu fallback survives failed interactive reads and is replaced only by successful enhancement', async () => {
+	const showMenuFallbackError = extractFunction(storefront, 'showMenuFallbackError', { I18N: {}, el: storefrontCreate });
+	const fallbackRoot = storefrontElement();
+	const fallback = storefrontElement();
+	fallback.setAttribute('data-doughboss-menu-fallback', '');
+	const browseItem = storefrontElement('li');
+	browseItem.textContent = 'Published browse-only item';
+	fallback.appendChild(browseItem);
+	fallbackRoot.appendChild(fallback);
+	const failedRender = extractFunction(storefront, 'renderMenu', {
+		...menuBrowserContext(),
+		Promise,
+		request: () => Promise.reject(new Error('network')),
+		getConfig: () => Promise.resolve({ ordering_open: false }),
+		showMenuFallbackError,
+		activeTableContext: () => null,
+		el: storefrontCreate,
+		I18N: {}
+	});
+	failedRender(fallbackRoot);
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(fallbackRoot.querySelector('[data-doughboss-menu-fallback]'), fallback);
+	assert.equal(fallback.children[0], browseItem);
+	const availability = fallback.querySelector('[data-doughboss-menu-availability]');
+	assert.ok(availability, 'failed reads add an availability notice to, not instead of, the browse fallback');
+	assert.equal(availability.attributes.role, 'status');
+	assert.equal(availability.attributes['aria-live'], 'polite');
+	showMenuFallbackError(fallbackRoot, new Error('retry failed'));
+	assert.equal(fallback.children.filter(child => Object.hasOwn(child.attributes, 'data-doughboss-menu-availability')).length, 1, 'repeated failures keep one notice');
+
+	const enhancedRoot = storefrontElement();
+	const enhancedFallback = storefrontElement();
+	enhancedFallback.setAttribute('data-doughboss-menu-fallback', '');
+	enhancedRoot.appendChild(enhancedFallback);
+	const successfulRender = extractFunction(storefront, 'renderMenu', {
+		...menuBrowserContext(),
+		Promise,
+		request: path => {
+			assert.equal(path, '/menu');
+			return Promise.resolve([]);
+		},
+		getConfig: () => Promise.resolve({ ordering_open: false }),
+		activeTableContext: () => null,
+		el: storefrontCreate,
+		I18N: {}
+	});
+	successfulRender(enhancedRoot);
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(enhancedRoot.querySelector('[data-doughboss-menu-fallback]'), null, 'a successful enhancement removes fallback content before rendering');
+	assert.equal(enhancedRoot.children.length, 1, 'successful enhancement leaves one menu experience');
+	assert.equal(enhancedRoot.children[0].className, 'db-empty');
+});
 
 const prettyUrl = extractFunction(storefront, 'restRequestUrl', {
 	DATA: { restUrl: 'https://example.test/wp-json/doughboss/v1' }
@@ -128,10 +1482,720 @@ assert.equal(retrySafe({ retry_safe: true, payment_pending: true }), false, 'con
 assert.equal(retrySafe({ retry_safe: false, payment_pending: false }), false, 'unknown provider outcomes remain locked');
 assert.equal(retrySafe({}), false, 'missing provider evidence remains locked');
 
+function squarePaymentHarness(options) {
+	options = options || {};
+	const requests = [];
+	const stored = [];
+	const placed = [];
+	const tokenizations = [];
+	let cartReady = options.cartReady !== false;
+	let resolveTokenization;
+	const fields = {
+		customer_name: 'Ada Customer',
+		customer_email: 'ada@example.test',
+		customer_phone: '0400 000 000'
+	};
+	const form = {
+		querySelector: selector => {
+			const match = /^\[name="([^"]+)"\]$/.exec(selector);
+			return match && Object.prototype.hasOwnProperty.call(fields, match[1]) ? { value: fields[match[1]] } : null;
+		}
+	};
+	form.doughbossCartGuard = () => !cartReady;
+	const validCurrency = extractFunction(square, 'validSquareCurrency');
+	const verificationDetailsFor = extractFunction(square, 'verificationDetailsFor', {
+		CONFIG: { currency: options.currency },
+		I18N: {},
+		readDisplayedTotal: () => options.total,
+		validSquareCurrency: validCurrency,
+		value: (node, name) => fields[name] || ''
+	});
+	const payAndPlace = extractFunction(square, 'payAndPlace', {
+		tokenizeTender: extractFunction(square, 'tokenizeTender'),
+		I18N: {},
+		orderTypeFor: () => 'pickup',
+		storedLocationId: () => 12,
+		verificationDetailsFor,
+		value: (node, name) => fields[name] || '',
+		storeSession: session => stored.push({ providerRequestStarted: session.providerRequestStarted, paymentId: session.paymentId }),
+		request: (route, requestOptions) => {
+			requests.push({ route, requestOptions });
+			return Promise.resolve(options.paymentResponse || { payment_intent: 'sq-payment-1' });
+		},
+		placeOrder: (session, orderType, locationId) => {
+			placed.push({ session, orderType, locationId });
+			return Promise.resolve({ order_id: 44 });
+		}
+	});
+	const session = {
+		form,
+		paymentAttemptKey: 'attempt-1',
+		paymentId: options.paymentId || '',
+		providerRequestStarted: options.providerRequestStarted === true,
+		controller: {
+			ready: () => Promise.resolve({
+				kind: options.tenderKind || 'card',
+				card: {
+					tokenize: details => {
+						tokenizations.push(details);
+						if (options.tokenizeError) { return Promise.reject(options.tokenizeError); }
+						if (options.deferTokenization) { return new Promise(resolve => { resolveTokenization = resolve; }); }
+						return Promise.resolve(options.tokenResult);
+					}
+				}
+			})
+		}
+	};
+	return { payAndPlace, session, requests, stored, placed, tokenizations,
+		setCartReady: ready => { cartReady = ready === true; },
+		resolveTokenization: result => resolveTokenization(result),
+		settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+test('Square puts buyer verification details into tokenization and sends only its resulting token', async () => {
+	const h = squarePaymentHarness({
+		total: '27.50',
+		currency: 'AUD',
+		tokenResult: { status: 'OK', token: 'cnon:browser-token' }
+	});
+	await h.payAndPlace(h.session);
+	assert.deepEqual(JSON.parse(JSON.stringify(h.tokenizations)), [{
+		amount: '27.50',
+		billingContact: { givenName: 'Ada', familyName: 'Customer', email: 'ada@example.test', phone: '0400 000 000' },
+		currencyCode: 'AUD',
+		intent: 'CHARGE',
+		customerInitiated: true,
+		sellerKeyedIn: false
+	}]);
+	assert.equal(h.requests.length, 1);
+	assert.equal(h.requests[0].route, '/payment-intent');
+	assert.equal(h.requests[0].requestOptions.body.source_id, 'cnon:browser-token');
+	assert.equal(Object.prototype.hasOwnProperty.call(h.requests[0].requestOptions.body, 'verification_token'), false);
+	assert.equal(h.session.providerRequestStarted, true);
+	assert.equal(h.placed.length, 1, 'a confirmed server payment still proceeds to checkout');
+	const source = fs.readFileSync(square, 'utf8');
+	assert.doesNotMatch(source, /verifyBuyer|verificationToken|verification_token/);
+});
+
+test('Square full-value gift checkout sends only the hosted-field nonce and tender selection', async () => {
+	const h = squarePaymentHarness({ total: '27.50', currency: 'AUD', tenderKind: 'gift_card', tokenResult: { status: 'OK', token: 'cnon:gift-secure-nonce' } });
+	await h.payAndPlace(h.session);
+	assert.deepEqual(h.tokenizations, [undefined], 'gift SDK tokenize takes no bank-card buyer verification details');
+	assert.equal(h.requests[0].requestOptions.body.tender_kind, 'gift_card');
+	assert.equal(h.requests[0].requestOptions.body.source_id, 'cnon:gift-secure-nonce');
+	assert.equal(JSON.stringify(h.stored).includes('cnon:'), false, 'nonce never enters recovery storage');
+	assert.equal(h.placed.length, 1);
+});
+
+test('Square cancelled, failed, or rejected tokenization never starts a provider request', async () => {
+	for (const outcome of [
+		{ label: 'cancelled challenge', tokenResult: { status: 'CANCELED' } },
+		{ label: 'failed challenge', tokenResult: { status: 'FAILED', errors: [{ message: 'Authentication failed' }] } },
+		{ label: 'rejected challenge', tokenizeError: new Error('Authentication rejected') }
+	]) {
+		const h = squarePaymentHarness(Object.assign({ total: '27.50', currency: 'AUD' }, outcome));
+		await assert.rejects(h.payAndPlace(h.session), undefined, outcome.label);
+		assert.equal(h.tokenizations.length, 1, outcome.label + ' reaches tokenization only');
+		assert.equal(h.requests.length, 0, outcome.label + ' cannot call /payment-intent');
+		assert.equal(h.placed.length, 0, outcome.label + ' cannot call /checkout');
+		assert.equal(h.session.providerRequestStarted, false, outcome.label + ' does not lock an unstarted provider request');
+		assert.equal(h.stored.length, 0, outcome.label + ' does not persist a provider request');
+	}
+});
+
+test('Square rejects absent display total and malformed currency before tokenization', async () => {
+	for (const options of [
+		{ label: 'missing total', total: null, currency: 'AUD' },
+		{ label: 'bad currency', total: '27.50', currency: 'aud' },
+		{ label: 'missing currency', total: '27.50', currency: '' }
+	]) {
+		const h = squarePaymentHarness(Object.assign({ tokenResult: { status: 'OK', token: 'cnon:ignored' } }, options));
+		await assert.rejects(h.payAndPlace(h.session), undefined, options.label);
+		assert.equal(h.tokenizations.length, 0, options.label + ' cannot obtain a token');
+		assert.equal(h.requests.length, 0, options.label + ' cannot call /payment-intent');
+		assert.equal(h.placed.length, 0, options.label + ' cannot call /checkout');
+		assert.equal(h.session.providerRequestStarted, false, options.label + ' leaves provider state unstarted');
+	}
+});
+
+test('Square replay with a known payment skips browser tokenization', async () => {
+	const h = squarePaymentHarness({ paymentId: 'sq-existing-payment' });
+	await h.payAndPlace(h.session);
+	assert.equal(h.tokenizations.length, 0);
+	assert.equal(h.requests.length, 0);
+	assert.equal(h.placed.length, 1);
+	assert.equal(h.session.providerRequestStarted, false);
+});
+
+test('Square stale-cart new payment is refused before tokenization while known-payment recovery remains allowed', async () => {
+	const stale = squarePaymentHarness({ cartReady: false });
+	await assert.rejects(stale.payAndPlace(stale.session), /Refresh your order/);
+	assert.equal(stale.tokenizations.length, 0, 'a stale cart cannot obtain a new browser token');
+	assert.equal(stale.requests.length, 0, 'a stale cart cannot call /payment-intent');
+	assert.equal(stale.placed.length, 0, 'a stale cart cannot call /checkout');
+	assert.equal(stale.session.providerRequestStarted, false, 'a stale cart leaves no uncertain provider state');
+
+	const recovery = squarePaymentHarness({ cartReady: false, paymentId: 'sq-already-paid' });
+	await recovery.payAndPlace(recovery.session);
+	assert.equal(recovery.tokenizations.length, 0, 'known payment recovery does not re-tokenize');
+	assert.equal(recovery.requests.length, 0, 'known payment recovery does not create another provider payment');
+	assert.equal(recovery.placed.length, 1, 'known payment recovery still attempts the idempotent checkout');
+});
+
+test('Square pending provider recovery without a payment ID cannot re-tokenize or create a second charge', async () => {
+	const h = squarePaymentHarness({ providerRequestStarted: true });
+	await assert.rejects(h.payAndPlace(h.session), /Payment confirmation is pending/);
+	assert.equal(h.tokenizations.length, 0);
+	assert.equal(h.requests.length, 0);
+	assert.equal(h.placed.length, 0);
+});
+
+test('Square cart turning stale during tokenization cannot start a provider request', async () => {
+	const h = squarePaymentHarness({ deferTokenization: true, total: '27.50', currency: 'AUD' });
+	const attempt = h.payAndPlace(h.session);
+	await h.settle();
+	assert.equal(h.tokenizations.length, 1, 'the tokenization was already in flight');
+	h.setCartReady(false);
+	h.resolveTokenization({ status: 'OK', token: 'cnon:late-token' });
+	await assert.rejects(attempt, /Refresh your order/);
+	assert.equal(h.requests.length, 0, 'a stale post-token response cannot call /payment-intent');
+	assert.equal(h.placed.length, 0, 'a stale post-token response cannot call /checkout');
+	assert.equal(h.session.providerRequestStarted, false, 'a stale post-token response cannot create recovery state');
+	assert.equal(h.stored.length, 0, 'a stale post-token response cannot persist a provider attempt');
+});
+
+test('Square retry-safe failure cannot re-enable a newly stale checkout', () => {
+	const submit = { disabled: false, textContent: 'Processing payment…' };
+	const form = {
+		doughbossCartReady: () => false,
+		querySelector: selector => selector === 'button[type="submit"]' ? submit : null,
+		setAttribute() {},
+		dispatchEvent() {}
+	};
+	let cleared = 0;
+	const fail = extractFunction(square, 'fail', {
+		I18N: { pay: 'Pay' },
+		isRetrySafeOutcome: extractFunction(square, 'isRetrySafeOutcome'),
+		readDisplayedTotal: () => '14.00',
+		money: amount => '$' + Number(amount).toFixed(2),
+		uuid: () => 'new-payment-attempt',
+		clearStoredSession: () => { cleared++; },
+		storeSession() {},
+		CustomEvent: function CustomEvent() {}
+	});
+	const session = {
+		form,
+		paymentId: 'sq-known-failed',
+		providerRequestStarted: true,
+		busy: true,
+		paymentAttemptKey: 'old-payment-attempt',
+		checkoutAttemptId: 'checkout-retry-key'
+	};
+	fail(session, { data: { retry_safe: true, payment_pending: false } });
+	assert.equal(session.paymentId, '');
+	assert.equal(session.providerRequestStarted, false);
+	assert.equal(submit.disabled, true, 'retry-safe recovery cannot unlock a stale new attempt');
+	assert.equal(session.paymentAttemptKey, 'new-payment-attempt');
+	assert.equal(session.checkoutAttemptId, null);
+	assert.equal(cleared, 1);
+});
+
 const validCateringQuote = extractFunction(catering, 'validCateringQuote');
 function cateringQuote(total) {
 	return { subtotal: total, delivery_fee: 0, total, deposit_pct: 30, deposit: total * 0.3, balance: total * 0.7, lead_days: 2, currency: 'AUD' };
 }
+
+function approvedSquareHarness(options = {}) {
+	const requests = [];
+	const tokenizations = [];
+	const summary = { gateway: 'square', total: 14, currency: 'AUD', square: { application_id: 'sq-app-1', location_id: 'sq-shop-bankstown', live_mode: false } };
+	const session = {
+		summary,
+		capability: { requestId: 91, token: 'a'.repeat(64) },
+		paymentAttemptKey: 'approved-attempt-1',
+		providerRequestStarted: !!options.pending,
+		controller: { ready: () => Promise.resolve({ card: { tokenize: details => {
+			tokenizations.push(details);
+			return Promise.resolve(options.tokenResult || { status: 'OK', token: 'cnon:approved' });
+		} }, kind: options.tenderKind || 'card' }) }
+	};
+	const request = async (route, requestOptions) => {
+		requests.push({ route, options: requestOptions });
+		if (options.failStart && route === '/preorder-payment/start') { throw new Error('Synthetic lost response'); }
+		return route === '/preorder-payment/start' ? { gateway: 'square', payment_intent: 'sq-provider-id' } : (Object.hasOwn(options, 'receipt') ? options.receipt : { success: true, order_number: 'DB-261001-ABC123', total: 14 });
+	};
+	const confirm = extractFunction(square, 'confirmApproved', { request, validApprovedSquareReceipt: extractFunction(square, 'validApprovedSquareReceipt') });
+	const pay = extractFunction(square, 'payApprovedSession', {
+		tokenizeTender: extractFunction(square, 'tokenizeTender'),
+		approvedVerificationDetails: extractFunction(square, 'approvedVerificationDetails', { validSquareCurrency: extractFunction(square, 'validSquareCurrency') }),
+		confirmApproved: confirm, request
+	});
+	return { session, requests, tokenizations, pay };
+}
+
+test('approved Square uses the capability routes and no client money or provider identity', async () => {
+	const h = approvedSquareHarness();
+	const paid = await h.pay(h.session);
+	assert.equal(paid.order_number, 'DB-261001-ABC123');
+	assert.equal(h.tokenizations[0].amount, '14.00');
+	assert.equal(h.tokenizations[0].currencyCode, 'AUD');
+	assert.deepEqual(h.requests.map(call => call.route), ['/preorder-payment/start', '/preorder-payment/complete']);
+	assert.deepEqual(Object.keys(h.requests[0].options.body).sort(), ['payment_attempt_key', 'request_id', 'source_id', 'tender_kind', 'token']);
+	assert.deepEqual(Object.keys(h.requests[1].options.body).sort(), ['request_id', 'token']);
+	assert.equal(h.requests[0].options.body.source_id, 'cnon:approved');
+	assert.equal(h.session.providerRequestStarted, true);
+});
+
+test('approved Square unknown start outcome retries only confirmation without another token or POST', async () => {
+	const h = approvedSquareHarness({ failStart: true });
+	await assert.rejects(h.pay(h.session), /lost response/);
+	await h.pay(h.session);
+	assert.deepEqual(h.requests.map(call => call.route), ['/preorder-payment/start', '/preorder-payment/complete']);
+	assert.equal(h.tokenizations.length, 1);
+	assert.equal(h.session.paymentAttemptKey, 'approved-attempt-1');
+});
+
+test('approved Square gift capture retains the exact approval routes and no new charge on recovery', async () => {
+	const h = approvedSquareHarness({ tenderKind: 'gift_card' });
+	await h.pay(h.session);
+	assert.deepEqual(h.tokenizations, [undefined]);
+	assert.equal(h.requests[0].options.body.tender_kind, 'gift_card');
+	assert.equal(h.requests[0].options.body.source_id, 'cnon:approved');
+	await h.pay(h.session);
+	assert.equal(h.tokenizations.length, 1);
+	assert.deepEqual(h.requests.map(x => x.route), ['/preorder-payment/start', '/preorder-payment/complete', '/preorder-payment/complete']);
+});
+
+test('approved Square reload recovery never tokenizes or starts a new payment', async () => {
+	const h = approvedSquareHarness({ pending: true });
+	await h.pay(h.session);
+	assert.equal(h.tokenizations.length, 0);
+	assert.deepEqual(h.requests.map(call => call.route), ['/preorder-payment/complete']);
+});
+
+test('approved Square cancelled or failed card verification makes no server payment call', async () => {
+	for (const status of ['CANCELED', 'FAILED', 'OK']) {
+		const h = approvedSquareHarness({ tokenResult: { status } });
+		await assert.rejects(h.pay(h.session), /verification was not completed/);
+		assert.equal(h.requests.length, 0);
+		assert.equal(h.session.providerRequestStarted, false);
+	}
+});
+
+test('approved Square rejects invalid public shop bindings and never uses the global shop', () => {
+	const binding = extractFunction(square, 'approvedSquareBinding');
+	const summary = { gateway: 'square', square: { application_id: 'sq-app-1', location_id: 'sq-bankstown-1', live_mode: false } };
+	assert.deepEqual(JSON.parse(JSON.stringify(binding(summary))), { applicationId: 'sq-app-1', locationId: 'sq-bankstown-1', liveMode: false });
+	for (const value of [null, { gateway: 'stripe', square: summary.square }, { gateway: 'square', square: { ...summary.square, location_id: '' } }, { gateway: 'square', square: { ...summary.square, live_mode: 'false' } }]) {
+		assert.throws(() => binding(value), /shop payment details/);
+	}
+});
+
+test('approved Square SDK stays dormant on environment mismatch and uses only the exact CDN', async () => {
+	let scripts = 0;
+	const load = extractFunction(square, 'loadApprovedSquareSdk', {
+		CONFIG: { sdkUrl: 'https://sandbox.web.squarecdn.com/v1/square.js' },
+		window: {}, document: { createElement: () => { scripts++; return {}; } }, sdkPromise: null
+	});
+	await assert.rejects(load({ liveMode: true }), /environment changed/);
+	assert.equal(scripts, 0);
+});
+
+function dormantSquareModuleHarness(harnessOptions = {}) {
+	const calls = [];
+	const sdkBindings = [];
+	const scripts = [];
+	const tokenizations = [];
+	const documentEvents = {};
+	const fieldStarts = { card: 0, gift: 0 };
+	function element(tag = 'div') {
+		return { tag, children: [], attributes: {}, className: '', parentNode: null, listeners: {},
+			addEventListener(name, listener) { this.listeners[name] = listener; },
+			appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+			insertBefore(child, target) { child.parentNode = this; this.children.splice(this.children.indexOf(target), 0, child); return child; },
+			setAttribute(key, value) { this.attributes[key] = value; },
+			querySelector(selector) { return selector === 'button[type="submit"]' ? this.children.find(child => child.tag === 'button') : null; }
+		};
+	}
+	const window = {
+		DoughBossData: { payments: { enabled: harnessOptions.ordinaryEnabled === true, gateway: 'square' }, restUrl: '/wp-json/doughboss/v1', currency: '$' },
+		DoughBossSquareConfig: {
+			applicationId: harnessOptions.ordinaryEnabled === true ? 'sq-app-test' : '',
+			locationId: harnessOptions.ordinaryEnabled === true ? 'sq-bankstown-test' : '',
+			currency: harnessOptions.ordinaryEnabled === true ? 'AUD' : '',
+			sdkUrl: 'https://sandbox.web.squarecdn.com/v1/square.js'
+		},
+		crypto: { randomUUID: () => 'synthetic-stable-key' }
+	};
+	const document = { readyState: 'loading', createElement: element, addEventListener(name, listener, capture) {
+		(documentEvents[name] || (documentEvents[name] = [])).push({ listener, capture: capture === true });
+	},
+		querySelector: selector => selector === 'input[name="db-order-type"]:checked' ? { value: 'pickup' } : null,
+		head: { appendChild(script) {
+			scripts.push(script);
+			window.Square = { payments(applicationId, locationId) {
+				sdkBindings.push({ applicationId, locationId });
+				return { giftCard: () => {
+					fieldStarts.gift++;
+					if (fieldStarts.gift <= (harnessOptions.giftFailures || 0)) { return Promise.reject(new Error('Synthetic gift mount failure')); }
+					return Promise.resolve({ attach: () => Promise.resolve(), tokenize: () => {
+					tokenizations.push(undefined);
+					return Promise.resolve({ status: 'OK', token: 'cnon:gift-synthetic-secure' });
+				} }); }, card: () => {
+					fieldStarts.card++;
+					if (fieldStarts.card <= (harnessOptions.cardFailures || 0)) { return Promise.reject(new Error('Synthetic card mount failure')); }
+					return Promise.resolve({ attach: () => Promise.resolve(), tokenize: details => {
+					tokenizations.push(details);
+					return Promise.resolve({ status: 'OK', token: 'cnon:synthetic-card' });
+				} }); } };
+			} };
+			script.onload();
+		} }
+	};
+	if (harnessOptions.ordinaryEnabled === true) document.head.appendChild({ onload() {} });
+	vm.runInNewContext(fs.readFileSync(square, 'utf8'), { window, document, Promise, CustomEvent: function () {}, fetch: async (url, options) => {
+		calls.push({ url, body: JSON.parse(options.body) });
+		return { ok: true, json: async () => url.endsWith('/payment-intent') ? { payment_intent: 'sq-provider-id' } : (url.endsWith('/start') ? { gateway: 'square' } : (Object.hasOwn(harnessOptions, 'receipt') ? harnessOptions.receipt : { success: true, order_number: 'DB-261001-ABC123', total: 14 })) };
+	} });
+	const form = element('form');
+	form.appendChild(element('button'));
+	const originalQuerySelector = form.querySelector;
+	form.querySelector = selector => {
+		if (harnessOptions.ordinaryEnabled === true && selector === '.db-checkout-summary-total') return { textContent: '$14.00' };
+		if (harnessOptions.ordinaryEnabled === true && selector === '[name="customer_name"]') return { value: 'Synthetic customer' };
+		if (harnessOptions.ordinaryEnabled === true && selector === '[name="customer_email"]') return { value: 'synthetic@example.invalid' };
+		if (harnessOptions.ordinaryEnabled === true && selector === '[name="customer_phone"]') return { value: '0400000000' };
+		return originalQuerySelector.call(form, selector);
+	};
+	form.dispatchEvent = () => {};
+	return { window, form, calls, scripts, sdkBindings, tokenizations, fieldStarts, documentEvents };
+}
+
+test('actual dormant Square module loads no SDK until approved mode and binds the exact capability shop', async () => {
+	const h = dormantSquareModuleHarness();
+	assert.equal(h.scripts.length, 0);
+	assert.equal(h.sdkBindings.length, 0);
+	h.window.DoughBossSquare.enhance(h.form);
+	assert.equal(h.form.children.length, 1, 'closed ordinary checkout has no card field');
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-roselands-test', live_mode: false }
+	}, { requestId: 93, token: 'b'.repeat(64) });
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.equal(h.scripts.length, 1);
+	assert.equal(h.scripts[0].src, 'https://sandbox.web.squarecdn.com/v1/square.js');
+	assert.deepEqual(h.sdkBindings, [{ applicationId: 'sq-app-test', locationId: 'sq-roselands-test' }]);
+	assert.equal(h.tokenizations.length, 1);
+	assert.deepEqual(h.calls.map(call => call.url), ['/wp-json/doughboss/v1/preorder-payment/start', '/wp-json/doughboss/v1/preorder-payment/complete']);
+	assert.equal(h.calls[1].body.request_id, 93);
+	assert.equal(Object.hasOwn(h.calls[1].body, 'payment_intent'), false);
+});
+
+test('actual approved module mounts Square gift fields on explicit selection and sends no GAN', async () => {
+	const h = dormantSquareModuleHarness();
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 93, token: 'b'.repeat(64) });
+	const wrap = h.form.children.find(x => x.className === 'db-cardfield db-cardfield--square');
+	const method = wrap.children.find(x => x.tag === 'select');
+	assert.equal(method.value, 'card');
+	method.value = 'gift_card';
+	method.listeners.change();
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.equal(h.calls[0].body.source_id, 'cnon:gift-synthetic-secure');
+	assert.equal(h.calls[0].body.tender_kind, 'gift_card');
+	assert.deepEqual(h.tokenizations, [undefined]);
+	assert.equal(wrap.children.find(x => x.className === 'db-square-card').hidden, true);
+	assert.equal(wrap.children.find(x => x.className === 'db-square-gift').hidden, false);
+	assert.match(wrap.children.find(x => x.tag === 'p').textContent, /Split payment is not yet available/);
+});
+
+test('failed ordinary card mount does not retry when paying with the selected gift card', async () => {
+	const h = dormantSquareModuleHarness({ cardFailures: 10 });
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 93, token: 'b'.repeat(64) });
+	await new Promise(resolve => setImmediate(resolve));
+	const wrap = h.form.children.find(x => x.className === 'db-cardfield db-cardfield--square');
+	const method = wrap.children.find(x => x.tag === 'select');
+	method.value = 'gift_card';
+	method.listeners.change();
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.deepEqual(h.fieldStarts, { card: 1, gift: 1 });
+	assert.deepEqual(h.tokenizations, [undefined]);
+	assert.equal(h.calls[0].body.tender_kind, 'gift_card');
+	assert.equal(wrap.children.find(x => x.tag === 'p').className, 'db-pay-secure');
+});
+
+test('switching back to a failed card mount retries safely without a null promise', async () => {
+	const h = dormantSquareModuleHarness({ cardFailures: 2 });
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 93, token: 'b'.repeat(64) });
+	await new Promise(resolve => setImmediate(resolve));
+	const wrap = h.form.children.find(x => x.className === 'db-cardfield db-cardfield--square');
+	const method = wrap.children.find(x => x.tag === 'select');
+	method.value = 'gift_card';
+	method.listeners.change();
+	await new Promise(resolve => setImmediate(resolve));
+	method.value = 'card';
+	assert.doesNotThrow(() => method.listeners.change());
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(h.calls.length, 0);
+	assert.equal(h.tokenizations.length, 0);
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.deepEqual(h.fieldStarts, { card: 3, gift: 1 });
+	assert.equal(h.calls[0].body.tender_kind, 'card');
+});
+
+test('failed gift mount retries only gift fields and makes no premature payment call', async () => {
+	const h = dormantSquareModuleHarness({ giftFailures: 2 });
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 93, token: 'b'.repeat(64) });
+	await new Promise(resolve => setImmediate(resolve));
+	const wrap = h.form.children.find(x => x.className === 'db-cardfield db-cardfield--square');
+	const method = wrap.children.find(x => x.tag === 'select');
+	method.value = 'gift_card';
+	method.listeners.change();
+	await new Promise(resolve => setImmediate(resolve));
+	await assert.rejects(h.window.DoughBossSquare.payApproved(h.form), /Synthetic gift mount failure/);
+	assert.equal(h.calls.length, 0);
+	assert.equal(h.tokenizations.length, 0);
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.deepEqual(h.fieldStarts, { card: 1, gift: 3 });
+	assert.deepEqual(h.tokenizations, [undefined]);
+	assert.equal(h.calls[0].body.tender_kind, 'gift_card');
+});
+
+test('actual ordinary checkout rejects selected gift mount failure before payment then retries once', async () => {
+	const h = dormantSquareModuleHarness({ ordinaryEnabled: true, giftFailures: 1 });
+	h.window.DoughBossSquare.enhance(h.form);
+	await new Promise(resolve => setImmediate(resolve));
+	const wrap = h.form.children.find(x => x.className === 'db-cardfield db-cardfield--square');
+	const method = wrap.children.find(x => x.tag === 'select');
+	method.value = 'gift_card';
+	method.listeners.change();
+	await assert.rejects(h.window.DoughBossSquare.pay(h.form), /Synthetic gift mount failure/);
+	assert.deepEqual(h.fieldStarts, { card: 1, gift: 1 }, 'the selected gift failure does not remount card');
+	assert.deepEqual(h.tokenizations, [], 'a mount failure cannot reach hosted-field tokenization');
+	assert.deepEqual(h.calls, [], 'a mount failure cannot call /payment-intent or /checkout');
+
+	method.listeners.change();
+	await h.window.DoughBossSquare.pay(h.form);
+	assert.deepEqual(h.fieldStarts, { card: 1, gift: 2 }, 'the successful retry remains on the selected gift tender without remounting card');
+	assert.deepEqual(h.tokenizations, [undefined], 'gift tokenization has no card verification details');
+	assert.deepEqual(h.calls.map(call => call.url), [
+		'/wp-json/doughboss/v1/payment-intent',
+		'/wp-json/doughboss/v1/checkout'
+	], 'only the successful retry starts one payment and places one order');
+	assert.equal(h.calls[0].body.tender_kind, 'gift_card');
+	assert.equal(h.calls[0].body.source_id, 'cnon:gift-synthetic-secure');
+});
+
+test('actual Square recovery module never loads SDK, mounts fields or tokenizes', async () => {
+	const h = dormantSquareModuleHarness();
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: false, can_confirm_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 94, token: 'c'.repeat(64) });
+	await h.window.DoughBossSquare.payApproved(h.form);
+	assert.equal(h.form.children.length, 1);
+	assert.equal(h.scripts.length, 0);
+	assert.equal(h.tokenizations.length, 0);
+	assert.deepEqual(h.calls.map(call => call.url), ['/wp-json/doughboss/v1/preorder-payment/complete']);
+});
+
+test('actual Square capture submit refuses a stale new attempt before busy state or checkout-start', async () => {
+	const h = dormantSquareModuleHarness({ ordinaryEnabled: true });
+	h.form.className = 'db-checkout';
+	h.form.nodeName = 'FORM';
+	h.form.doughbossCartGuard = () => true;
+	const lifecycle = [];
+	h.form.dispatchEvent = event => { lifecycle.push(event.type); };
+	h.window.DoughBossSquare.enhance(h.form);
+	await new Promise(resolve => setImmediate(resolve));
+	const capture = h.documentEvents.submit.find(entry => entry.capture === true);
+	assert.ok(capture, 'the actual capture-phase submit listener is registered');
+	let prevented = 0;
+	let stopped = 0;
+	capture.listener({
+		target: h.form,
+		preventDefault: () => { prevented++; },
+		stopPropagation: () => { stopped++; }
+	});
+	assert.equal(prevented, 1);
+	assert.equal(stopped, 1);
+	assert.deepEqual(lifecycle, [], 'stale refusal happens before checkout-start');
+	assert.equal(h.form.attributes['aria-busy'], undefined, 'stale refusal does not mark the form busy');
+	assert.equal(h.tokenizations.length, 0, 'stale refusal cannot tokenize');
+	assert.equal(h.calls.length, 0, 'stale refusal cannot call a financial or checkout endpoint');
+});
+
+test('actual approved Square module rejects a missing capability before loading card fields', () => {
+	const h = dormantSquareModuleHarness();
+	assert.throws(() => h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 94, token: '' }), /valid approved payment link/);
+	assert.equal(h.form.children.length, 1);
+	assert.equal(h.scripts.length, 0);
+	assert.equal(h.calls.length, 0);
+});
+
+function invalidApprovedReceipts() {
+	const valid = { success: true, order_number: 'DB-261001-ABC123', total: 14 };
+	return [null, {}, { ...valid, success: false }, { ...valid, order_number: undefined },
+		{ ...valid, order_number: '' }, { ...valid, order_number: '<img src=x>' },
+		{ ...valid, order_number: 'DB-261001-ABC123\n' }, { ...valid, total: undefined },
+		{ ...valid, total: null }, { ...valid, total: '14.00' }, { ...valid, total: NaN },
+		{ ...valid, total: Infinity }, { ...valid, total: -14 }, { ...valid, total: 0 },
+		{ ...valid, total: 14.005 }, { ...valid, total: 14.01 }];
+}
+
+test('actual Square module rejects malformed HTTP-200 receipts and never charges again', async () => {
+	for (const receipt of invalidApprovedReceipts()) {
+		const h = dormantSquareModuleHarness({ receipt });
+		h.window.DoughBossSquare.enhanceApproved(h.form, {
+			gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+			square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+		}, { requestId: 94, token: 'c'.repeat(64) });
+		await assert.rejects(h.window.DoughBossSquare.payApproved(h.form), /receipt could not be confirmed/);
+		assert.equal(h.window.DoughBossSquare.approvedPending(h.form), true);
+		await assert.rejects(h.window.DoughBossSquare.payApproved(h.form), /receipt could not be confirmed/);
+		assert.equal(h.tokenizations.length, 1);
+		assert.deepEqual(h.calls.map(call => call.url), ['/wp-json/doughboss/v1/preorder-payment/start', '/wp-json/doughboss/v1/preorder-payment/complete', '/wp-json/doughboss/v1/preorder-payment/complete']);
+		assert.equal(h.calls[2].body.token, 'c'.repeat(64), 'capability remains in the bounded recovery session');
+	}
+});
+
+test('approved receipt validation compares exact minor units and accepts a valid replay', async () => {
+	const validate = extractFunction(square, 'validApprovedSquareReceipt');
+	assert.equal(validate({ success: true, order_number: 'DB-261001-ABC123', total: 0.29 }, { total: 0.29 }), true);
+	assert.equal(validate({ success: true, order_number: 'DB-261001-ABC123', total: 14 }, { total: 14.01 }), false);
+	assert.equal(validate({ success: true, order_number: 'DB-261001-ABC123', total: 14 }, { total: '14' }), false);
+	const h = dormantSquareModuleHarness({ receipt: { success: true, order_number: 'DB-261001-ABC123', total: 14, replayed: true } });
+	h.window.DoughBossSquare.enhanceApproved(h.form, {
+		gateway: 'square', total: 14, currency: 'AUD', can_start_payment: true,
+		square: { application_id: 'sq-app-test', location_id: 'sq-bankstown-test', live_mode: false }
+	}, { requestId: 94, token: 'c'.repeat(64) });
+	assert.equal((await h.window.DoughBossSquare.payApproved(h.form)).success, true);
+	assert.equal((await h.window.DoughBossSquare.payApproved(h.form)).replayed, true);
+	assert.equal(h.tokenizations.length, 1);
+	assert.equal(h.calls.filter(call => call.url.endsWith('/start')).length, 1);
+});
+
+function approvedScreenHarness(summary, paymentError, options = {}) {
+	const elements = [];
+	const calls = [];
+	const locks = [];
+	const historyRemovals = [];
+	let pending = summary.can_confirm_payment === true;
+	function element(tag, attrs = {}, children = []) {
+		const node = { tag, attrs, children: [], textContent: attrs.text || '', listeners: {}, hidden: false,
+			set innerHTML(value) { this.children = []; this.textContent = value; },
+			get firstChild() { return this.children[0] || null; },
+			appendChild(child) { if (child) { this.children.push(child); } return child; },
+			addEventListener(name, callback) { this.listeners[name] = callback; },
+			setAttribute(key, value) { this.attrs[key] = value; }, closest() { return { hidden: true }; }
+		};
+		children.forEach(child => node.appendChild(child));
+		elements.push(node);
+		return node;
+	}
+	const presentation = extractFunction(storefront, 'approvedPreorderPresentation');
+	const render = extractFunction(storefront, 'renderApprovedPreorder', {
+		document: { body: { classList: { add() {} } }, querySelectorAll: () => [] },
+		window: { history: { replaceState() { historyRemovals.push(true); } }, location: { pathname: '/order/', search: '' }, DoughBossSquare: {
+			enhanceApproved(form, state, capability) { calls.push({ type: 'enhance', form, state, capability }); },
+			payApproved(form) {
+				calls.push({ type: 'pay', form }); pending = true;
+				if (paymentError) { return Promise.reject(paymentError); }
+				const confirm = extractFunction(square, 'confirmApproved', {
+					request: async () => Object.hasOwn(options, 'receipt') ? options.receipt : { success: true, order_number: 'DB-261001-ABC123', total: summary.total },
+					validApprovedSquareReceipt: extractFunction(square, 'validApprovedSquareReceipt')
+				});
+				return confirm({ summary, capability: { requestId: 97, token: 'd'.repeat(64) } });
+			},
+			approvedPending() { return pending; }
+		} },
+		el: element, money: amount => '$' + Number(amount).toFixed(2),
+		approvedPreorderPresentation: presentation,
+		isApprovedPreorderComplete: state => state.presentation_state === 'complete',
+		approvedSquareRecoverable: extractFunction(storefront, 'approvedSquareRecoverable'),
+		approvedPreorderContact: () => null,
+		setPaymentMutationLock: locked => locks.push(locked),
+		clearError: node => { node.textContent = ''; }, announceError: (node, message) => { node.textContent = message; }, revealNode() {},
+		request: async route => { calls.push({ type: 'request', route }); return summary; }
+	});
+	const root = element('main');
+	render(root, { requestId: 97, token: 'd'.repeat(64) });
+	const textOf = node => [node.textContent, ...node.children.map(textOf)].join(' ');
+	return { elements, calls, locks, historyRemovals, text: () => textOf(root), settle: () => new Promise(resolve => setImmediate(resolve)) };
+}
+
+test('approved screen renders Square payment and confirms only after its server completion', async () => {
+	const h = approvedScreenHarness({ gateway: 'square', presentation_state: 'ready', can_start_payment: true, total: 14, currency: 'AUD', items: [] });
+	await h.settle();
+	assert.match(h.text(), /Pay securely with Square/);
+	assert.doesNotMatch(h.text(), /Continue to Stripe|after Stripe/);
+	const form = h.elements.find(node => node.tag === 'form');
+	assert.ok(form);
+	form.listeners.submit({ preventDefault() {} });
+	await h.settle();
+	assert.match(h.text(), /Payment verified/);
+	assert.equal(h.calls.filter(call => call.type === 'pay').length, 1);
+	assert.equal(h.locks.at(-1), false);
+});
+
+test('approved screen keeps uncertain Square result in confirmation-only recovery', async () => {
+	const h = approvedScreenHarness({ gateway: 'square', presentation_state: 'held', can_start_payment: false, can_confirm_payment: true, total: 14, currency: 'AUD', items: [] }, new Error('Synthetic pending'));
+	await h.settle();
+	assert.match(h.text(), /Check existing payment/);
+	const form = h.elements.find(node => node.tag === 'form');
+	form.listeners.submit({ preventDefault() {} });
+	await h.settle();
+	assert.match(h.text(), /Do not pay again/);
+	assert.doesNotMatch(h.text(), /Pay securely with Square/);
+	assert.equal(form.attrs['aria-busy'], 'false');
+	assert.equal(h.locks.at(-1), true);
+});
+
+test('approved screen never presents malformed HTTP-200 receipts as paid or discards recovery', async () => {
+	for (const receipt of invalidApprovedReceipts()) {
+		const h = approvedScreenHarness({ gateway: 'square', presentation_state: 'ready', can_start_payment: true, total: 14, currency: 'AUD', items: [] }, null, { receipt });
+		await h.settle();
+		const form = h.elements.find(node => node.tag === 'form');
+		form.listeners.submit({ preventDefault() {} });
+		await h.settle();
+		assert.doesNotMatch(h.text(), /Payment verified|Your order is in/);
+		assert.match(h.text(), /Do not pay again/);
+		assert.match(h.text(), /Check existing payment/);
+		assert.equal(h.locks.at(-1), true);
+		assert.equal(h.historyRemovals.length, 0);
+		assert.equal(form.attrs['aria-busy'], 'false');
+	}
+});
+
+test('closed ordering keeps Square dormant while approved recovery is explicitly scoped', () => {
+	const source = fs.readFileSync(square, 'utf8');
+	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
+	assert.match(source, /function enhance\(form\) \{\s*if \(!ordinaryEnabled\) \{ return; \}/);
+	assert.match(assets, /'applicationId'\s*=> \$payments_on \? DoughBoss_Square::publishable_key\(\) : ''/);
+	assert.match(assets, /'locationId'\s*=> \$payments_on \? \(string\) \$square_binding\['square_location_id'\] : ''/);
+	assert.doesNotMatch(assets, /'locationId'\s*=>[^\n]*DoughBoss_Square::location_id\(\)/);
+	assert.match(assets, /\$single_location_id = DoughBoss_Locations::single_location_id\(\)/);
+	assert.match(assets, /online_payment_location\( \$single_location_id \)/);
+	assert.match(assets, /ready_for_location\( \$single_location_id \)/);
+	const recovery = extractFunction(storefront, 'approvedSquareRecoverable');
+	assert.equal(recovery({ gateway: 'square', can_confirm_payment: true }), true);
+	assert.equal(recovery({ gateway: 'stripe', can_confirm_payment: true }), false);
+	assert.equal(recovery({ gateway: 'square', can_confirm_payment: 'true' }), false);
+});
 
 test('catering quotes reject error objects and invalid display fields', () => {
 	assert.equal(validCateringQuote(cateringQuote(100)), true);
@@ -215,27 +2279,47 @@ test('malformed current quotes fail closed and custom selection invalidates an i
 	assert.equal(h.requests.length, 2, 'custom selection does not send a quote request');
 });
 
-test('catering selection updates only summary and card states without replacing form inputs', () => {
-	const state = { selectedId: 1, guests: 22, orderType: 'delivery' };
+test('catering quantity changes update only summary and card steppers without replacing form inputs', () => {
+	const state = { packages: [{ id: 1, name: 'Synthetic A', price: 46 }, { id: 2, name: 'Synthetic B', price: 72 }], quantities: {}, lines: [], selectedId: 0, guests: 22, orderType: 'pickup' };
 	const summary = {};
-	const cards = [1, 2].map(id => ({ getAttribute: () => String(id), classList: { toggle: (key, value) => { cards[id - 1].selected = value; } }, setAttribute: (key, value) => { cards[id - 1][key] = value; } }));
+	const cards = [1, 2].map(id => {
+		const controls = { output: { textContent: '0' }, minus: { disabled: true }, plus: { disabled: false } };
+		return { id, controls, getAttribute: () => String(id), classList: { toggle: (key, value) => { cards[id - 1].selected = value; } },
+			querySelector: selector => ({ '[data-qty-for]': controls.output, '[data-step="-1"]': controls.minus, '[data-step="1"]': controls.plus })[selector] };
+	});
 	let refreshed = 0;
 	const root = {
 		querySelector: selector => { assert.equal(selector, '.dbc-selected'); return summary; },
-		querySelectorAll: selector => { assert.equal(selector, '[data-pick]'); return cards; }
+		querySelectorAll: selector => { assert.equal(selector, '[data-package-card]'); return cards; }
 	};
 	Object.defineProperty(root, 'innerHTML', { set: () => assert.fail('selection must not replace the form DOM') });
-	const select = extractFunction(catering, 'selectPackage', {
-		state, root, selectedPackage: () => ({ name: 'Synthetic package', price: 72 }), esc: value => value,
-		money: value => '$' + value, refreshQuote: () => { refreshed++; }
+	const selectionSummary = extractFunction(catering, 'selectionSummary', { state, esc: value => value, money: value => '$' + value });
+	const setQuantity = extractFunction(catering, 'setPackageQuantity', {
+		state, root, selectionSummary, MAX_PACKAGE_QTY: 50, refreshQuote: () => { refreshed++; }
 	});
-	select(2);
+	setQuantity(2, 2);
 	assert.equal(refreshed, 1);
-	assert.equal(state.selectedId, 2);
+	assert.equal(state.selectedId, 2, 'one package type keeps the legacy single package id');
+	assert.deepEqual(JSON.parse(JSON.stringify(state.lines)), [{ id: 2, qty: 2 }]);
+	assert.equal(cards[1].selected, true);
+	assert.equal(cards[1].controls.output.textContent, '2');
+	assert.equal(cards[1].controls.minus.disabled, false);
+	setQuantity(1, 1);
+	assert.equal(state.selectedId, 0, 'a combined selection has no single package id');
+	assert.deepEqual(JSON.parse(JSON.stringify(state.lines)), [{ id: 1, qty: 1 }, { id: 2, qty: 2 }]);
+	assert.match(summary.innerHTML, /1 × Synthetic A.*2 × Synthetic B/);
+	setQuantity(2, 99);
+	assert.equal(state.quantities[2], 50, 'quantities are capped');
+	assert.equal(cards[1].controls.plus.disabled, true);
+	setQuantity(9, 3);
+	assert.equal(state.quantities[9], undefined, 'unknown packages are ignored');
+	setQuantity(1, 0);
+	setQuantity(2, 0);
+	assert.deepEqual(JSON.parse(JSON.stringify(state.lines)), []);
+	assert.equal(state.selectedId, 0);
 	assert.equal(state.guests, 22);
-	assert.equal(state.orderType, 'delivery');
-	assert.equal(cards[0]['aria-pressed'], 'false');
-	assert.equal(cards[1]['aria-pressed'], 'true');
+	assert.equal(state.orderType, 'pickup');
+	assert.equal(refreshed, 5);
 });
 
 test('catering estimate states never render old totals while pending or unavailable', () => {
@@ -308,7 +2392,7 @@ function cateringLocationHarness(saved) {
 	const requests = [];
 	const context = {
 		state, cateringLocationId, root: { querySelector: () => ({}) }, updateCateringLocation: () => {},
-		window: { localStorage: { getItem: () => { if (saved instanceof Error) throw saved; return saved; } } },
+		window: { DoughBossPreferences: { readShop: () => { if (saved instanceof Error) throw saved; return saved; } } },
 		get: url => new Promise((resolve, reject) => requests.push({ url, resolve, reject }))
 	};
 	const load = extractFunction(catering, 'loadCateringLocations', context);
@@ -416,12 +2500,20 @@ test('shop UI changes only its controls, keeping other form values untouched', (
 	assert.match(note.textContent, /Sending enquiry for Synthetic shop B/);
 });
 
-test('enquiry submits the exact shop and form snapshot once, retaining fields after server errors', async () => {
-	const state = { locations: syntheticShops, locationId: 2, locationStatus: 'ready', submitting: false, selectedId: 9, orderType: 'delivery' };
+function cateringSubmissionFixture(overrides = {}, nativeValidity = true) {
+	const state = { locations: syntheticShops, locationId: 2, locationStatus: 'ready', submitting: false, selectedId: 9, lines: [{ id: 9, qty: 2 }], orderType: 'delivery' };
 	const values = { customer_name: 'Synthetic customer', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000', guest_count: '12', event_date: '2099-10-10', event_time: '12:30', address: 'Synthetic venue', dietary: 'Synthetic dietary note', notes: 'Retain this note', hp: '' };
+	Object.assign(values, overrides);
 	const error = {};
 	const button = { textContent: 'Request booking & quote', disabled: false };
-	const form = { classList: { contains: () => true }, querySelector: selector => selector === '.dbc-error' ? error : button };
+	const focused = [];
+	const inputs = {};
+	for (const name of ['customer_name', 'customer_email']) {
+		inputs[name] = { attributes: {}, setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; }, focus() { focused.push(name); } };
+	}
+	if (typeof nativeValidity === 'boolean') inputs.customer_email.validity = { valid: nativeValidity };
+	const form = { classList: { contains: () => true }, querySelector: selector => ({ '.dbc-error': error, '.dbc-submit': button, '[name="customer_name"]': inputs.customer_name, '[name="customer_email"]': inputs.customer_email })[selector] };
+	Object.defineProperty(form, 'innerHTML', { set() { assert.fail('validation or submission must not rebuild the form'); } });
 	const sends = [];
 	const selected = extractFunction(catering, 'selectedCateringLocation', { state });
 	const submit = extractFunction(catering, 'submitCateringEnquiry', {
@@ -430,8 +2522,57 @@ test('enquiry submits the exact shop and form snapshot once, retaining fields af
 		post: (url, body) => new Promise(resolve => sends.push({ url, body, resolve })), showSuccess: () => assert.fail('failed response cannot show success')
 	});
 	const event = { target: form, preventDefault: () => {} };
-	const pending = submit(event);
-	submit(event);
+	return { state, values, error, button, inputs, focused, sends, submit: () => submit(event) };
+}
+
+test('catering contact preflight focuses the first invalid field and makes no POST', () => {
+	for (const options of [
+		{ values: { customer_name: '  ', customer_email: 'invalid' }, first: 'customer_name' },
+		{ values: { customer_email: '' }, first: 'customer_email' },
+		{ values: { customer_email: 'missing-at.example' }, first: 'customer_email' },
+		{ values: { customer_email: 'a@localhost' }, first: 'customer_email' },
+		{ values: { customer_email: 'a<x@company.test' }, first: 'customer_email' },
+		{ values: { customer_email: 'a@company.test\r\nBcc:victim@example.test' }, first: 'customer_email' },
+		{ values: { customer_email: 'valid@company.test' }, native: false, first: 'customer_email' },
+		{ values: { customer_email: 'missing-at.example' }, native: null, first: 'customer_email' }
+	]) {
+		const h = cateringSubmissionFixture(options.values, Object.hasOwn(options, 'native') ? options.native : true);
+		const before = JSON.stringify({ values: h.values, lines: h.state.lines });
+		h.submit();
+		assert.deepEqual(h.sends, [], 'invalid data never reaches the submission route');
+		assert.deepEqual(h.focused, [options.first]);
+		assert.equal(h.inputs[options.first].attributes['aria-invalid'], 'true');
+		assert.match(h.error.textContent, /Please enter/);
+		assert.equal(h.state.submitting, false);
+		assert.equal(h.button.disabled, false);
+		assert.equal(JSON.stringify({ values: h.values, lines: h.state.lines }), before, 'invalid submission retains all fields and package selections');
+	}
+});
+
+test('catering corrected or fallback-valid email submits while optional date and phone stay optional', async () => {
+	for (const native of [true, null]) {
+		const h = cateringSubmissionFixture({ customer_name: '', customer_email: 'bad', customer_phone: '', event_date: '', event_time: '' }, native);
+		h.submit();
+		h.values.customer_name = 'Synthetic organiser';
+		h.values.customer_email = 'organiser+office@company.test';
+		const pending = h.submit();
+		assert.equal(h.sends.length, 1);
+		assert.equal(h.inputs.customer_name.attributes['aria-invalid'], undefined);
+		assert.equal(h.inputs.customer_email.attributes['aria-invalid'], undefined);
+		for (const key of ['customer_phone', 'event_date', 'event_time']) assert.equal(h.sends[0].body[key], '');
+		h.sends[0].resolve({ ok: false, data: { message: 'Synthetic rejection' } });
+		await pending;
+		assert.equal(h.values.customer_email, 'organiser+office@company.test');
+		assert.equal(h.state.lines[0].qty, 2);
+		assert.equal(h.sends.length, 1, 'server errors never trigger an automatic retry');
+	}
+});
+
+test('enquiry submits the exact shop and form snapshot once, retaining fields after server errors', async () => {
+	const h = cateringSubmissionFixture();
+	const { state, values, error, button, sends } = h;
+	const pending = h.submit();
+	h.submit();
 	assert.equal(sends.length, 1);
 	assert.equal(sends[0].url, '/catering/enquiry');
 	assert.equal(sends[0].body.location_id, 2);
@@ -439,16 +2580,19 @@ test('enquiry submits the exact shop and form snapshot once, retaining fields af
 	assert.equal(state.submittedLocationName, 'Synthetic shop B');
 	values.notes = 'Edited while pending';
 	values.event_time = '13:45';
+	state.lines[0].qty = 4;
 	assert.equal(sends[0].body.notes, 'Retain this note', 'in-flight payload does not reread edited fields');
 	assert.equal(sends[0].body.event_time, '12:30');
+	assert.equal(sends[0].body.packages[0].qty, 2, 'submitted package snapshot is not mutated by current edits');
 	sends[0].resolve({ ok: false, data: { message: 'That catering package is no longer available.' } });
 	await pending;
 	assert.equal(state.submitting, false);
 	assert.equal(button.disabled, false);
 	assert.match(error.textContent, /package is no longer available/);
 	assert.equal(values.notes, 'Edited while pending', 'failure preserves the current form rather than restoring old inputs');
+	assert.equal(state.lines[0].qty, 4, 'failure preserves the edited package selection');
 	state.locationId = 0;
-	submit(event);
+	h.submit();
 	assert.equal(sends.length, 1, 'unavailable location must not POST legacy zero');
 	assert.match(error.textContent, /Choose an available shop/);
 });
@@ -642,13 +2786,207 @@ test('paused client notice uses neutral copy and preserves configured messages',
 	assert.doesNotMatch(fs.readFileSync(storefront, 'utf8'), /'Coming soon'|'Online ordering coming soon'/);
 });
 
-function previewAdapter(paused) {
+test('paused order page keeps only the approved Stripe surface available', () => {
+	const page = fs.readFileSync(path.resolve(__dirname, '..', 'themes', 'doughboss-final', 'page-order.php'), 'utf8');
+	const source = fs.readFileSync(storefront, 'utf8');
+	const themeCss = fs.readFileSync(path.resolve(__dirname, '..', 'themes', 'doughboss-final', 'style.css'), 'utf8');
+	const orderPageCss = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'css', 'doughboss-order-page.css'), 'utf8');
+	assert.match(page, /class="dbf-cart-wrap"<\?php echo \$ordering_open \? '' : ' hidden'; \?>/,
+		'publicly paused pages render the cart host hidden instead of publishing checkout');
+	assert.match(page, /\[doughboss_cart\]/, 'the hidden host remains available for a valid approved-payment capability');
+	assert.match(source, /document\.body\.classList\.add\('db-approved-preorder-mode'\)/);
+	assert.match(source, /var cartWrap = root\.closest\('\.dbf-cart-wrap'\);\s*if \(cartWrap\) \{ cartWrap\.hidden = false; \}/,
+		'approved capability mode reveals the hidden cart host');
+	assert.ok(source.indexOf('var APPROVED_PREORDER = approvedPreorderCapability();') < source.indexOf('var tableContextReady = getTableContext();'),
+		'the bearer is captured before asynchronous bootstrap or API reads');
+	assert.match(source, /if \(APPROVED_PREORDER\) \{\s*try \{ window\.history\.replaceState\(\{\}, document\.title, window\.location\.pathname \+ window\.location\.search\); \}/,
+		'the capability fragment is scrubbed immediately and retained only in the module closure');
+	assert.match(source, /var approvedPreorder = APPROVED_PREORDER;/, 'boot never reparses the scrubbed URL fragment');
+	assert.match(source, /function boot\(\) \{\s*var approvedPreorder = APPROVED_PREORDER;\s*if \(approvedPreorder\) \{[\s\S]*?renderApprovedPreorder\(root, approvedPreorder\);[\s\S]*?return;\s*\}[\s\S]*?getTableContext\(\)/,
+		'approved payment renders before and independently of table-session bootstrap');
+	assert.match(themeCss, /body\.db-approved-preorder-mode \.dbf-page-hero--order,[\s\S]*?\[data-doughboss-shop\] \{ display: none !important; \}/,
+		'approved capability mode suppresses the public shopping surfaces');
+	assert.match(orderPageCss, /body\.doughboss-order-page \.db-approved-preorder \.db-ordering-status \{[\s\S]*?margin: 1rem 0 0 !important;[\s\S]*?box-shadow: none;/,
+		'approved status stays in normal card flow instead of inheriting the hero-overlap treatment');
+});
+
+test('approved payment presentation is deterministic and requires explicit start authority', () => {
+	const present = extractFunction(storefront, 'approvedPreorderPresentation');
+	const asLocal = value => JSON.parse(JSON.stringify(value));
+	for (const state of ['held', 'expired', 'payment_disabled', 'complete', 'unavailable']) {
+		const result = asLocal(present({ presentation_state: state, can_start_payment: true }));
+		assert.equal(result.state, state);
+		assert.equal(result.canStart, false, state + ' cannot expose a new payment start');
+		assert.ok(result.title && result.body, state + ' has distinct customer copy');
+	}
+	assert.equal(present({ presentation_state: 'ready', can_start_payment: true }).canStart, true);
+	assert.equal(present({ presentation_state: 'ready', can_start_payment: false }).canStart, false);
+	assert.equal(present({ presentation_state: 'ready' }).canStart, false, 'missing authority fails closed');
+});
+
+test('a refreshed completed summary suppresses the payment verification retry warning', async () => {
+	const present = extractFunction(storefront, 'approvedPreorderPresentation');
+	const isComplete = extractFunction(storefront, 'isApprovedPreorderComplete', {
+		approvedPreorderPresentation: present
+	});
+	let retryShown = false;
+	await Promise.reject(new Error('Synthetic first completion failure')).catch(async () => {
+		const refreshed = await Promise.resolve({ presentation_state: 'complete', complete: true });
+		if (!isComplete(refreshed)) { retryShown = true; }
+	});
+	assert.equal(retryShown, false, 'webhook-completed state remains the only customer message');
+	assert.equal(isComplete({ presentation_state: 'held', complete: false }), false);
+	const source = fs.readFileSync(storefront, 'utf8');
+	assert.match(source, /loadSummary\(\)\.then\(function \(summary\) \{\s*if \(!isApprovedPreorderComplete\(summary\)\) \{ showVerificationRetry\(err\); \}/,
+		'the actual Stripe-return fallback gates its warning on the refreshed durable state');
+});
+
+test('approved payment uses only validated shop telephone links', () => {
+	const contact = extractFunction(storefront, 'approvedPreorderContact');
+	assert.deepEqual(JSON.parse(JSON.stringify(contact({ contact_phone: '02 9708 2222', contact_tel: 'tel:+61297082222' }))), {
+		phone: '02 9708 2222', tel: 'tel:+61297082222'
+	});
+	for (const value of ['', 'tel:', 'sms:+61400000000', 'tel:javascript:alert(1)', 'tel:+61 400 000 000']) {
+		assert.equal(contact({ contact_phone: '0400 000 000', contact_tel: value }), null, value || 'empty');
+	}
+});
+
+test('Stripe return and native retry verify the exact same payment without starting another', async () => {
+	const calls = [];
+	const verify = extractFunction(storefront, 'verifyApprovedPreorder', {
+		request: (route, options) => { calls.push({ route, options }); return Promise.resolve({ complete: true }); }
+	});
+	const capability = { requestId: 91, token: 'a'.repeat(64), sessionId: 'cs_test_bound' };
+	await verify(capability);
+	await verify(capability);
+	assert.equal(calls.length, 2);
+	for (const call of calls) {
+		assert.equal(call.route, '/preorder-payment/complete');
+		assert.deepEqual(JSON.parse(JSON.stringify(call.options.body)), { request_id: 91, token: 'a'.repeat(64), session_id: 'cs_test_bound' });
+	}
+	assert.doesNotMatch(verify.toString(), /preorder-payment\/start/);
+	const source = fs.readFileSync(storefront, 'utf8');
+	assert.match(source, /class: 'db-btn db-preorder-retry'[\s\S]*?verifyApprovedPreorder\(capability\)/);
+	assert.match(source, /if \(capability\.cancelled && !capability\.returning\)/,
+		'a client cancellation marker cannot replace the Stripe-return verification path');
+	const approvedFlowSource = source.slice(source.indexOf('function renderApprovedPreorder('), source.indexOf('function boot()'));
+	assert.doesNotMatch(approvedFlowSource, /localStorage|sessionStorage|type:\s*'hidden'.*doughboss_token|textarea.*doughboss_token/);
+});
+
+test('approved capability boot bypasses a broken or revoked table context', () => {
+	let tableReads = 0;
+	let approvedRenders = 0;
+	const cart = {};
+	const boot = extractFunction(storefront, 'boot', {
+		APPROVED_PREORDER: { requestId: 7 },
+		document: { querySelectorAll: selector => selector === '[data-doughboss-cart]' ? [cart] : [] },
+		renderApprovedPreorder: (root, capability) => { assert.equal(root, cart); assert.equal(capability.requestId, 7); approvedRenders += 1; },
+		renderTracking: () => {},
+		getTableContext: () => { tableReads += 1; return Promise.reject(new Error('revoked')); }
+	});
+	boot();
+	assert.equal(approvedRenders, 1);
+	assert.equal(tableReads, 0, 'table context cannot block or replace an approved-payment capability');
+});
+
+test('ordinary ordering still fails closed when a claimed table session is invalid', async () => {
+	let tableReads = 0;
+	const blocked = [{ appendChild(node) { this.node = node; } }, { appendChild(node) { this.node = node; } }];
+	const boot = extractFunction(storefront, 'boot', {
+		APPROVED_PREORDER: null,
+		document: {
+			addEventListener() {},
+			querySelectorAll: selector => selector.indexOf(',') !== -1 ? blocked : []
+		},
+		renderApprovedPreorder: () => assert.fail('approved renderer must not run'),
+		renderTracking: () => {}, renderShopPicker: () => {}, renderMenu: () => {}, renderBuilder: () => {}, renderCart: () => {},
+		getConfig: () => Promise.resolve({}),
+		getLocations: () => Promise.resolve([]),
+		getTableContext: () => { tableReads += 1; return Promise.reject(new Error('revoked')); },
+		el: (tag, attrs) => ({ tag, attrs })
+	});
+	boot();
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(tableReads, 1);
+	assert.equal(blocked.every(node => node.node && /scan the table QR again/.test(node.node.attrs.text)), true);
+});
+
+test('ordinary storefront warms public reads in parallel but renders only after the table gate', async () => {
+	let resolveTable;
+	const events = [];
+	const roots = {
+		'[data-doughboss-shop]': [{}],
+		'[data-doughboss-menu]': [{}],
+		'[data-doughboss-builder]': [{}],
+		'[data-doughboss-cart]': [{}],
+		'[data-doughboss-tracking]': [{}]
+	};
+	const boot = extractFunction(storefront, 'boot', {
+		APPROVED_PREORDER: null,
+		document: {
+			addEventListener() {},
+			querySelectorAll: selector => roots[selector] || []
+		},
+		getTableContext: () => {
+			events.push('table:start');
+			return new Promise(resolve => { resolveTable = resolve; });
+		},
+		getConfig: () => { events.push('config:start'); return Promise.resolve({}); },
+		getLocations: () => { events.push('locations:start'); return Promise.resolve([]); },
+		renderShopPicker: () => events.push('render:shop'),
+		renderMenu: () => events.push('render:menu'),
+		renderBuilder: () => events.push('render:builder'),
+		renderCart: () => events.push('render:cart'),
+		renderTracking: () => events.push('render:tracking')
+	});
+
+	boot();
+	assert.deepEqual(events, ['table:start', 'config:start', 'locations:start']);
+	resolveTable(null);
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(events, [
+		'table:start', 'config:start', 'locations:start',
+		'render:shop', 'render:menu', 'render:builder', 'render:cart', 'render:tracking'
+	]);
+});
+
+test('approver recovery copies only the existing bearer and reports mail handoff honestly', async () => {
+	const calls = [];
+	const copied = [];
+	const messages = [];
+	const recover = extractFunction(orderboard, 'recoverPreorderPaymentLink', {
+		offline: false,
+		setPreorderBusy: () => true,
+		api: (route, method, body) => {
+			calls.push({ route, method, body });
+			return Promise.resolve({ payment_url: 'https://doughboss.test/order/#doughboss_request=9&doughboss_token=' + 'b'.repeat(64) });
+		},
+		window: { location: { origin: 'https://doughboss.test' } },
+		navigator: { clipboard: { writeText: value => { copied.push(value); return Promise.resolve(); } } },
+		URL,
+		setPreorderMessage: (message, error) => messages.push({ message, error }),
+		applyConnectionState: () => {},
+		load: () => Promise.resolve()
+	});
+	await recover({ id: 9 }, 'view');
+	assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ route: '/admin/preorder/9/payment-link', method: 'POST', body: { mode: 'view' } }]);
+	assert.equal(copied.length, 1);
+	assert.match(messages[0].message, /existing approved payment link was copied securely/i);
+	assert.doesNotMatch(recover.toString(), /createElement|textarea|type=['"]hidden/,
+		'the bearer has no visible or hidden DOM clipboard fallback');
+	const boardSource = fs.readFileSync(orderboard, 'utf8');
+	assert.doesNotMatch(boardSource, /awaiting Kristy|Kristy calls first/);
+	assert.match(boardSource, /customerStatus === 'accepted'[\s\S]*?Delivery is not guaranteed/);
+});
+
+function previewAdapter(paused, cartPreview = false) {
 	const window = { DoughBossPreviewOptions: { menu: [{ id: 1001, image: 'public/images/menu/real-v1/zaatar-cheese.jpg' }] } };
 	const listeners = {};
 	const document = {
 		currentScript: { src: 'https://example.test/DOUGHBOSSV2/preview/preview-api.js' },
 		baseURI: 'https://example.test/DOUGHBOSSV2/order.html',
 		body: { classList: { contains: name => paused && name === 'dbf-ordering-paused' } },
+		querySelector: selector => cartPreview && selector === '[data-db-preview-cart="synthetic"]' ? {} : null,
 		addEventListener: (type, handler) => { listeners[type] = handler; },
 		getElementById: () => null
 	};
@@ -700,6 +3038,52 @@ test('visual preview keeps paused state separate and sample hours short-lived', 
 	assert.equal(menu[0].image, 'https://example.test/DOUGHBOSSV2/public/images/menu/real-v1/zaatar-cheese.jpg');
 });
 
+test('explicit cart preview exposes only fixed synthetic cart reads with one shop and payments off', async () => {
+	const { window } = previewAdapter(false, true);
+	const apiRoot = 'https://preview.invalid/doughboss/v1';
+	const config = await (await window.fetch(apiRoot + '/config')).json();
+	assert.equal(config.single_location_mode, true);
+	assert.equal(config.single_location_id, 901);
+	assert.equal(config.payments_enabled, false);
+	assert.equal(config.stripe_pk, '');
+	assert.equal(window.DoughBossData.payments.enabled, false);
+	assert.notEqual(config.pickup_scheduling, true, 'no hold routes or provider simulation');
+	const locations = await (await window.fetch(apiRoot + '/locations')).json();
+	assert.equal(locations.length, 1);
+	assert.equal(locations[0].id, 901);
+	for (const route of ['/cart', '/cart?order_type=pickup']) {
+		const response = await window.fetch(apiRoot + route);
+		assert.equal(response.status, 200);
+		const cart = await response.json();
+		assert.equal(cart.items.length, 2);
+		assert.equal(cart.totals.total, 33);
+		assert.equal(cart.items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0), cart.totals.total);
+		assert.equal(cart.items.reduce((sum, item) => sum + item.quantity, 0), cart.totals.item_count);
+		assert.ok(cart.items.every(item => item.name.startsWith('Sample ') && item.toppings.every(option => typeof option.label === 'string')));
+		cart.items[0].quantity = 99;
+	}
+	assert.equal((await (await window.fetch(apiRoot + '/cart')).json()).items[0].quantity, 2, 'responses cannot mutate later fixture reads');
+	for (const route of ['/cart', '/cart/add', '/cart/update', '/cart/remove', '/cart/revalidate', '/cart/apply-voucher', '/cart/remove-voucher', '/checkout', '/payment-intent', '/pickup/hold']) {
+		for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']) {
+			assert.equal((await window.fetch(apiRoot + route, { method, body: '{}' })).status, 405, method + ' ' + route);
+		}
+	}
+	for (const route of ['/checkout', '/payment-intent', '/cart/add', '/pickup/hold']) {
+		assert.equal((await window.fetch(apiRoot + route)).status, 404, 'no new consequential GET route: ' + route);
+	}
+	for (const suffix of ['?order_type=delivery', '?order_type=pickup&email=x', '?order_type=pickup&order_type=pickup', '?order_type[]=pickup', '?order_type=pickup#private']) {
+		assert.equal((await window.fetch(apiRoot + '/cart' + suffix)).status, 403, suffix);
+	}
+	for (const url of ['https://doughboss.com.au/wp-json/doughboss/v1/cart', 'https://api.stripe.com/v1/checkout/sessions', 'https://user:secret@preview.invalid/doughboss/v1/cart']) {
+		assert.equal((await window.fetch(url)).status, 403, 'external or credential URL blocked');
+	}
+	assert.equal((await previewAdapter(true, true).window.fetch(apiRoot + '/cart')).status, 404, 'paused page cannot enable synthetic cart');
+	const ordinary = previewAdapter(false).window;
+	assert.equal((await ordinary.fetch(apiRoot + '/locations')).status, 200);
+	assert.equal((await (await ordinary.fetch(apiRoot + '/locations')).json()).length, 2, 'ordinary two-shop demo unchanged');
+	assert.equal((await ordinary.fetch(apiRoot + '/cart')).status, 404, 'ordinary page still has no cart read');
+});
+
 test('preview srcsets permit only existing local assets and truthful ordered width descriptors', () => {
 	const validator = path.resolve(__dirname, '..', 'scripts/validate-visual-preview.js');
 	const relativeFiles = ['public/images/responsive/hero-480.avif', 'public/images/responsive/hero-960.webp'];
@@ -722,4 +3106,702 @@ test('preview srcsets permit only existing local assets and truthful ordered wid
 	]) assert.throws(() => validate(value, 'index.html'), value);
 });
 
+function photoMotionHarness({ reduced = false, legacy = false, noControl = false, noMedia = false } = {}) {
+	const frames = [];
+	const events = {};
+	const query = { matches: reduced };
+	const listen = callback => { events.preference = callback; };
+	if (legacy) query.addListener = listen;
+	else query.addEventListener = (name, callback) => listen(callback);
+	const controls = [];
+	const heroes = [0, 1].map(() => {
+		const control = themeNode({ 'data-db-pause-label': 'Pause photo motion',
+			'data-db-resume-label': 'Resume photo motion', 'data-db-reduced-label': 'Photo motion off' });
+		control.listeners = {};
+		control.addEventListener = (name, callback) => { control.listeners[name] = callback; };
+		const hero = themeNode({}, [control]);
+		hero.querySelector = () => noControl ? null : control;
+		hero.getBoundingClientRect = () => ({ top: -100, bottom: 500, height: 600 });
+		hero.writes = [];
+		hero.style = { setProperty: (name, value) => hero.writes.push([name, value]) };
+		controls.push(control);
+		return hero;
+	});
+	const window = { innerHeight: 800, requestAnimationFrame: callback => frames.push(callback),
+		addEventListener: (name, callback) => { events[name] = callback; } };
+	if (!noMedia) window.matchMedia = () => query;
+	vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/js/doughboss-manoush-hero.js'), 'utf8'), {
+		window, document: { querySelectorAll: () => heroes }, Math
+	});
+	return { frames, events, heroes, controls,
+		flush: () => { while (frames.length) frames.shift()(); },
+		preference: reduced => { query.matches = reduced; events.preference({ matches: reduced }); }
+	};
+}
+
+test('photo hero starts reduced motion with a truthful disabled control and no queued frames', () => {
+	const h = photoMotionHarness({ reduced: true });
+	for (const control of h.controls) {
+		assert.equal(control.disabled, true);
+		assert.equal(control.textContent, 'Photo motion off');
+		assert.equal(control.getAttribute('aria-label'), 'Photo motion off');
+		assert.equal(control.getAttribute('aria-pressed'), 'true');
+		control.listeners.click();
+	}
+	assert.ok(h.heroes.every(hero => hero._dbPhotoPaused === undefined), 'blocked clicks do not change manual choice');
+	h.events.scroll();
+	h.events.resize();
+	assert.equal(h.frames.length, 0);
+	assert.match(fs.readFileSync(path.join(__dirname, '../includes/class-doughboss-shortcodes.php'), 'utf8'),
+		/data-db-reduced-label="<\?php esc_attr_e\( 'Photo motion off', 'doughboss' \); \?>"/);
+});
+
+test('photo hero retains each manual pause through both system preference transitions', () => {
+	const h = photoMotionHarness();
+	h.flush();
+	h.controls[0].listeners.click();
+	const pausedWrites = h.heroes[0].writes.length;
+	assert.equal(h.controls[0].textContent, 'Resume photo motion');
+	h.preference(true);
+	assert.ok(h.controls.every(control => control.disabled && control.textContent === 'Photo motion off'));
+	h.preference(false);
+	assert.equal(h.controls[0].disabled, false);
+	assert.equal(h.controls[0].textContent, 'Resume photo motion');
+	assert.equal(h.controls[0].getAttribute('aria-pressed'), 'true');
+	assert.equal(h.heroes[0]._dbPhotoPaused, true);
+	assert.equal(h.heroes[0].classList.contains('is-photo-paused'), true);
+	assert.equal(h.controls[1].textContent, 'Pause photo motion');
+	assert.equal(h.controls[1].getAttribute('aria-pressed'), 'false');
+	h.flush();
+	h.events.scroll();
+	h.flush();
+	assert.equal(h.heroes[0].writes.length, pausedWrites, 'manual pause prevents later parallax writes');
+	assert.ok(h.heroes[1].writes.length > pausedWrites, 'unpaused hero resumes normal motion');
+	const css = fs.readFileSync(path.join(__dirname, '../public/css/doughboss-manoush-hero.css'), 'utf8');
+	assert.match(css, /\.db-manoush-hero\.is-photo-paused \.db-mh-backdrop\s*\{[^}]*animation: none;/);
+	assert.ok(css.indexOf('.is-photo-paused .db-mh-backdrop') > css.indexOf('.is-photo-ready .db-mh-backdrop'));
+});
+
+test('photo hero blocks an already queued frame when reduced motion becomes active', () => {
+	const h = photoMotionHarness();
+	assert.equal(h.frames.length, 1);
+	h.preference(true);
+	h.flush();
+	assert.ok(h.heroes.every(hero => hero.writes.length === 0));
+	h.events.scroll();
+	assert.equal(h.frames.length, 0);
+	h.preference(false);
+	h.flush();
+	assert.ok(h.controls.every(control => !control.disabled && control.textContent === 'Pause photo motion'));
+	assert.ok(h.heroes.every(hero => hero.writes.length === 2));
+});
+
+test('photo hero supports legacy preference listeners and absent controls', () => {
+	const h = photoMotionHarness({ reduced: true, legacy: true, noControl: true });
+	assert.equal(h.frames.length, 0);
+	assert.doesNotThrow(() => h.preference(false));
+	h.flush();
+	assert.ok(h.heroes.every(hero => hero.writes.length === 2));
+});
+
+test('photo hero preserves ordinary controls without matchMedia', () => {
+	const h = photoMotionHarness({ noMedia: true });
+	assert.ok(h.controls.every(control => !control.disabled && control.textContent === 'Pause photo motion'));
+	h.flush();
+	h.controls[0].listeners.click();
+	assert.equal(h.controls[0].textContent, 'Resume photo motion');
+	assert.equal(h.controls[0].getAttribute('aria-pressed'), 'true');
+});
+
 console.log('Storefront helper regression checks passed.');
+
+test('Square hosted checkout opens only Square payment-link hosts for the active mode', () => {
+	const valid = extractFunction(storefront, 'squareHostedCheckoutUrlValid');
+	assert.equal(valid('https://square.link/u/AbC123', true), true);
+	assert.equal(valid('https://checkout.square.site/merchant/x/order/y', true), true);
+	assert.equal(valid('https://sandbox.square.link/u/jUjglZiR', false), true);
+	for (const [url, live] of [
+		['https://sandbox.square.link/u/x', true], ['https://square.link/u/x', false], ['http://square.link/u/x', true],
+		['https://square.link.evil.test/u/x', true], ['https://evil.test/square.link/', true], ['javascript:alert(1)', true],
+		['https://square.link/u/"x', true], ['https://square.link', true], [null, true], ['https://square.link/u/x#frag', true]
+	]) {
+		assert.equal(valid(url, live), false, String(url) + ' ' + live);
+	}
+});
+
+test('Square hosted return key and saved checkout resume are strict and time bounded', () => {
+	const key = 'ab'.repeat(32);
+	const returned = extractFunction(storefront, 'squareHostedReturnKey');
+	assert.equal(returned('?doughboss_square_return=' + key), key);
+	assert.equal(returned('?page_id=7&doughboss_square_return=' + key + '&orderId=x'), key);
+	assert.equal(returned('?doughboss_square_return=' + key.toUpperCase()), '');
+	assert.equal(returned('?doughboss_square_return=' + key + 'a'), '');
+	assert.equal(returned('?xdoughboss_square_return=' + key), '');
+	assert.equal(returned('?doughboss_square_return=' + key + '?orderId=sq123'), key, 'Square-appended parameters do not hide the key');
+	const fresh = extractFunction(storefront, 'squareHostedPendingFresh');
+	const now = 1_800_000_000_000;
+	const pending = { checkoutReference: key, payload: { payment_attempt_key: 'attempt-key-1' }, checkoutAttemptId: 'checkout-attempt-0001', savedAt: now - 1000 };
+	assert.equal(fresh(pending, now), true);
+	assert.equal(fresh(Object.assign({}, pending, { savedAt: now - 45 * 60 * 1000 }), now), false, 'expired lease');
+	assert.equal(fresh(Object.assign({}, pending, { savedAt: now + 1000 }), now), false, 'future timestamp');
+	assert.equal(fresh(Object.assign({}, pending, { checkoutReference: 'cs_test_x' }), now), false);
+	assert.equal(fresh(Object.assign({}, pending, { payload: {} }), now), false);
+	assert.equal(fresh(Object.assign({}, pending, { checkoutAttemptId: 'short' }), now), false);
+	assert.equal(fresh(null, now), false);
+});
+
+test('Square hosted confirmation polls only unconfirmed answers and is bounded', async () => {
+	const confirm = extractFunction(storefront, 'confirmSquareHosted', { Math, Number });
+	const waits = [];
+	const wait = ms => { waits.push(ms); return Promise.resolve(); };
+	const error = (code, data) => Object.assign(new Error(code), { code, data });
+	let calls = 0;
+	const receipt = await confirm(() => { calls += 1; return calls < 3 ? Promise.reject(error('doughboss_square_hosted_unpaid', { hosted_state: 'unpaid', payment_pending: true })) : Promise.resolve({ order_number: 'DB-1' }); }, wait, 5);
+	assert.equal(receipt.order_number, 'DB-1');
+	assert.equal(calls, 3);
+	assert.deepEqual(waits, [0, 2000, 3000]);
+
+	calls = 0;
+	await assert.rejects(confirm(() => { calls += 1; return Promise.reject(error('doughboss_square_hosted_pending', { hosted_state: 'pending' })); }, wait, 5));
+	assert.equal(calls, 5, 'never more than five confirmation reads');
+
+	calls = 0;
+	await assert.rejects(confirm(() => { calls += 1; return Promise.reject(error('doughboss_square_hosted_closed', { hosted_state: 'failed', outcome: 'terminal_no_charge' })); }, wait, 5));
+	assert.equal(calls, 1, 'a closed checkout is not polled');
+
+	calls = 0;
+	await assert.rejects(confirm(() => { calls += 1; return Promise.reject(error('doughboss_pay_mismatch', { payment_pending: true })); }, wait, 5));
+	assert.equal(calls, 1, 'a held payment is not polled');
+
+	calls = 0;
+	await assert.rejects(confirm(() => { calls += 1; return Promise.reject(error('doughboss_square_hosted_unpaid', { hosted_state: 'unpaid' })); }, wait, 1));
+	assert.equal(calls, 1, 'a non-return page visit checks once');
+	assert.doesNotMatch(confirm.toString(), /payment-intent/);
+});
+
+test('Square hosted storefront wiring never loads card fields and confirms only through /checkout', () => {
+	const source = fs.readFileSync(storefront, 'utf8');
+	const squareSource = fs.readFileSync(square, 'utf8');
+	assert.match(source, /var squareHosted = !!\(PAY\.enabled && GATEWAY === 'square' && PAY\.squareHosted === true\);/);
+	assert.match(squareSource, /var ordinaryEnabled = !!\(PAY\.enabled && PAY\.squareHosted !== true && CONFIG\.applicationId && CONFIG\.locationId\);/,
+		'ordinary Square SDK fields stay dormant in hosted mode');
+	const hostedBranch = source.slice(source.indexOf('} else if (squareHosted) {'), source.indexOf('} else if (stripeHosted) {'));
+	assert.match(hostedBranch, /request\('\/payment-intent'/);
+	assert.doesNotMatch(hostedBranch, /source_id|verification_token|tender_kind|tokenize/);
+	assert.match(hostedBranch, /squareHostedCheckoutUrlValid\(session\.checkout_url, !!PAY\.liveMode\)/);
+	assert.match(hostedBranch, /window\.location\.assign\(session\.checkout_url\)/);
+	const finish = source.slice(source.indexOf('function finishSquareHosted('), source.indexOf('function completeOrder('));
+	assert.match(finish, /request\('\/checkout'/);
+	assert.match(finish, /square_checkout: pending\.checkoutReference/);
+	assert.doesNotMatch(finish, /payment-intent/);
+	const cancel = source.slice(source.indexOf("squareHostedCancel.addEventListener('click'"), source.indexOf('// Tyro Connect: hosted payment form'));
+	assert.match(cancel, /paymentAttemptKey = newPaymentAttemptKey\(\);/, 'changing the order starts a new attempt key');
+	assert.doesNotMatch(cancel, /request\(/, 'cancelling makes no payment call');
+	assert.match(source, /if \(data\.hosted_state === 'unpaid'\) \{\s*squareHostedCancel\.hidden = false;/, 'change-order is offered only for a server-confirmed unpaid checkout');
+	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
+	assert.match(assets, /'squareHosted'\s*=> \$square_hosted,/);
+	assert.match(assets, /\} elseif \( 'square' === \$gateway && ! \$square_hosted \) \{/, 'no Web Payments SDK enqueue in hosted mode');
+});
+
+const preferencesFile = path.resolve(__dirname, '..', 'public', 'js', 'doughboss-preferences.js');
+function preferencesHarness(seed = {}, blocked = false) {
+	const values = Object.assign({}, seed);
+	const calls = [];
+	const events = [];
+	let now = 1800000000000;
+	const storage = {
+		getItem(key) { calls.push(['get', key]); if (blocked) throw new Error('blocked'); return values[key] ?? null; },
+		setItem(key, value) { calls.push(['set', key]); if (blocked) throw new Error('blocked'); values[key] = String(value); },
+		removeItem(key) { calls.push(['remove', key]); if (blocked) throw new Error('blocked'); delete values[key]; }
+	};
+	const make = extractFunction(preferencesFile, 'createPreferences');
+	const api = make(() => storage, () => now, next => events.push(next));
+	return { values, calls, events, api, advance(ms) { now += ms; } };
+}
+
+test('device preferences default off, do not read optional values, and have a 180-day decision', () => {
+	const h = preferencesHarness({ doughboss_location: '2', doughboss_remember_details: '{"customer_name":"Legacy"}', 'db-hero-motion': 'off', essential: 'keep' });
+	assert.equal(h.api.allowed(), false);
+	assert.equal(h.api.readShop(), 0);
+	assert.equal(h.api.readDetails(), null);
+	assert.equal(h.api.writeShop(2), false);
+	assert.equal(h.api.writeDetails({ customer_name: 'Synthetic' }), false);
+	assert.deepEqual(h.calls.filter(x => x[0] === 'get').map(x => x[1]), ['doughboss_preferences_v1']);
+	assert.equal(h.calls.some(x => x[0] === 'set'), false);
+	assert.equal(h.values.essential, 'keep');
+	assert.equal(h.api.choose(true), true);
+	const decision = JSON.parse(h.values.doughboss_preferences_v1);
+	assert.equal(decision.version, 1);
+	assert.equal(decision.preferences, true);
+	assert.equal(decision.expiresAt - decision.savedAt, 180 * 86400000);
+	assert.equal(h.values.doughboss_remember_details, undefined, 'allowing preferences is not contact opt-in');
+	assert.equal(h.api.choose('yes'), false);
+	for (const invalid of [true, {}, '', '1e2', '2.5', -1, 2.5, Infinity, 2147483648]) {
+		assert.equal(h.api.writeShop(invalid), false);
+	}
+	assert.equal(h.api.writeShop('2'), true);
+});
+
+test('remember-details has a separate 30-day opt-in, whitelist, bound and guarded storage', () => {
+	const h = preferencesHarness();
+	const read = extractFunction(storefront, 'readRememberedDetails');
+	const write = extractFunction(storefront, 'writeRememberedDetails');
+	const clear = extractFunction(storefront, 'clearRememberedDetails');
+	assert.equal(write(h.api, { customer_name: 'Synthetic' }), false);
+	h.api.choose(true);
+	assert.equal(read(h.api), null);
+	assert.equal(write(h.api, { customer_name: ' Synthetic Customer ', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000', address: 'never store', notes: 'never store' }), true);
+	const saved = JSON.parse(h.values.doughboss_remember_details);
+	assert.equal(saved.version, 1);
+	assert.equal(saved.expiresAt - saved.savedAt, 30 * 86400000);
+	assert.deepEqual(saved.details, { customer_name: 'Synthetic Customer', customer_email: 'synthetic@example.invalid', customer_phone: '0400000000' });
+	assert.deepEqual(JSON.parse(JSON.stringify(read(h.api))), saved.details);
+	write(h.api, { customer_name: 'x'.repeat(500) });
+	assert.equal(read(h.api).customer_name.length, 200);
+	clear(h.api);
+	assert.equal(read(h.api), null);
+	h.values.doughboss_remember_details = JSON.stringify({ customer_name: 'Legacy' });
+	assert.equal(read(h.api), null, 'legacy contacts are not reused');
+	assert.equal(h.values.doughboss_remember_details, undefined);
+	h.values.doughboss_remember_details = '{not json';
+	assert.equal(read(h.api), null);
+	const blocked = preferencesHarness({}, true);
+	blocked.api.choose(true);
+	assert.equal(read(blocked.api), null);
+	assert.equal(write(blocked.api, { customer_name: 'a' }), false);
+	assert.doesNotThrow(() => clear(blocked.api));
+	assert.equal(read(null), null);
+	const source = fs.readFileSync(storefront, 'utf8');
+	assert.match(source, /rememberDetailsControl\(\{ customer_name: name, customer_email: email, customer_phone: phone \}\)/);
+	assert.match(source, /Remember my details on this device for 30 days \(optional\)/);
+});
+
+test('expiry and invalid consent fail closed, clearing only named optional keys', () => {
+	for (const consent of [
+		{ version: 2, savedAt: 1799999999000, expiresAt: 1800000001000, preferences: true },
+		{ version: 1, savedAt: 1799999999000, expiresAt: 1800000000000, preferences: true },
+		{ version: 1, savedAt: 1800000000001, expiresAt: 1800000001000, preferences: true },
+		{ version: 1, savedAt: 1799999999000, expiresAt: 1800000000000 + 181 * 86400000, preferences: true },
+		{ version: 1, savedAt: 1799999999000, expiresAt: 1800000001000, preferences: 'yes' }
+	]) {
+		const h = preferencesHarness({ doughboss_preferences_v1: JSON.stringify(consent), doughboss_location: '2', essential: 'keep' });
+		assert.equal(h.api.allowed(), false);
+		assert.equal(h.values.doughboss_location, undefined);
+		assert.equal(h.values.essential, 'keep');
+	}
+	const h = preferencesHarness();
+	h.api.choose(true);
+	h.api.writeShop(2);
+	h.api.writeDetails({ customer_name: 'Synthetic' });
+	h.values['db-hero-motion'] = 'off';
+	h.values.doughbossSquareHostedPending = 'keep';
+	h.values.unrelated = 'keep';
+	h.advance(180 * 86400000);
+	assert.equal(h.api.allowed(), false);
+	assert.equal(h.values.doughboss_preferences_v1, undefined);
+	assert.equal(h.values.doughboss_location, undefined);
+	assert.equal(h.values.doughboss_remember_details, undefined);
+	assert.equal(h.values['db-hero-motion'], undefined);
+	assert.equal(h.values.doughbossSquareHostedPending, 'keep');
+	assert.equal(h.values.unrelated, 'keep');
+	assert.equal(h.events.at(-1).decided, false);
+});
+
+test('contact expiry is independent, withdrawal and cross-tab denial delete optional records', () => {
+	const h = preferencesHarness();
+	h.api.choose(true);
+	h.api.writeShop(2);
+	h.api.writeDetails({ customer_name: 'Synthetic' });
+	h.advance(30 * 86400000);
+	assert.equal(h.api.readDetails(), null);
+	assert.equal(h.api.readShop(), 2);
+	h.api.writeDetails({ customer_name: 'Synthetic' });
+	h.api.choose(false);
+	assert.equal(h.api.readShop(), 2, 'withdrawal does not unset the current-page transactional shop');
+	assert.equal(h.values.doughboss_location, undefined);
+	assert.equal(h.values.doughboss_remember_details, undefined);
+	assert.equal(JSON.parse(h.values.doughboss_preferences_v1).preferences, false);
+	h.api.choose(true);
+	h.api.writeShop(2);
+	h.values.doughboss_preferences_v1 = JSON.stringify({ version: 1, savedAt: 1800000000000, expiresAt: 1800000000000 + 180 * 86400000, preferences: false });
+	h.api.reload();
+	assert.equal(h.api.allowed(), false);
+	assert.equal(h.values.doughboss_location, undefined);
+	delete h.values.doughboss_preferences_v1;
+	h.api.reload();
+	assert.equal(h.api.getConsent().decided, false);
+});
+
+test('granting preferences persists the existing page shop without opting into remembered contact', () => {
+	const h = preferencesHarness();
+	assert.equal(h.api.writeShop(7), false);
+	assert.equal(h.api.readShop(), 7);
+	assert.equal(h.values.doughboss_location, undefined);
+	assert.equal(h.api.choose(true), true);
+	assert.equal(h.values.doughboss_location, '7');
+	assert.equal(h.values.doughboss_remember_details, undefined, 'shop permission never opts into contact storage');
+	const reopened = preferencesHarness(h.values);
+	assert.equal(reopened.api.readShop(), 7, 'a subsequent page can read the explicitly allowed preference');
+	const blocked = preferencesHarness({}, true);
+	blocked.api.writeShop(8);
+	assert.equal(blocked.api.choose(true), false);
+	assert.equal(blocked.api.readShop(), 8, 'storage failure preserves the current page selection');
+	assert.equal(blocked.events.at(-1).persisted, false);
+});
+
+
+test('page shop selection survives withdrawal and blocked preference storage', () => {
+	const h = preferencesHarness();
+	h.api.choose(true);
+	h.api.writeShop(2);
+	const ctx = { currentPageLocationId: 0, window: { DoughBossPreferences: h.api } };
+	const read = extractFunction(storefront, 'storedLocationId', ctx);
+	assert.equal(read(), 2);
+	h.api.choose(false);
+	assert.equal(read(), 2, 'already adopted shop remains available for the current page');
+	const blocked = preferencesHarness({}, true);
+	blocked.api.choose(true);
+	assert.equal(blocked.api.writeShop(3), false, 'blocked storage never reports persistence');
+	assert.equal(blocked.api.readShop(), 3, 'Square and other consumers retain the current-page shop');
+	const selected = extractFunction(storefront, 'storedLocationId', { currentPageLocationId: 3, window: { DoughBossPreferences: blocked.api } });
+	assert.equal(selected(), 3);
+});
+
+test('preferences leave essential storage untouched and never enable analytics or advertising', () => {
+	const source = fs.readFileSync(preferencesFile, 'utf8');
+	assert.doesNotMatch(source, /sessionStorage|document\.cookie|\.clear\s*\(/);
+	assert.match(source, /'db-hero-motion'/);
+	const calls = [];
+	const events = [];
+	const sync = extractFunction(preferencesFile, 'syncMarketing', {
+		window: { DoughBossMarketing: { setConsent: value => calls.push(value) } },
+		document: { dispatchEvent: value => events.push(value) },
+		CustomEvent: function (name, options) { this.type = name; this.detail = options.detail; }
+	});
+	sync();
+	assert.equal(calls[0].measurement, false);
+	assert.equal(calls[0].advertising, false);
+	assert.equal(events[0].type, 'doughboss:consent');
+	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
+	assert.ok(assets.indexOf("'doughboss-preferences'") < assets.indexOf("'doughboss-shop-status'"));
+	assert.match(assets, /DoughBossPreferences\.syncMarketing\(\)/);
+	assert.match(assets, /privacyUrl[\s\S]*termsUrl/);
+});
+
+test('empty remembered-details opt-in remains selected and saves later edits, but denial and real storage failures do not', () => {
+	function controlHarness({ permitted = true, blocked = false } = {}) {
+		const h = preferencesHarness({}, blocked);
+		if (permitted) h.api.choose(true);
+		const fields = ['customer_name', 'customer_email', 'customer_phone'];
+		const inputs = {};
+		const wraps = {};
+		fields.forEach(key => {
+			inputs[key] = { value: '', listeners: {}, addEventListener(type, listener) { this.listeners[type] = listener; } };
+			wraps[key] = { querySelector: () => inputs[key] };
+		});
+		let checkbox;
+		let feedback;
+		const control = extractFunction(storefront, 'rememberDetailsControl', {
+			REMEMBER_DETAILS_FIELDS: fields,
+			rememberStorage: () => h.api,
+			readRememberedDetails: extractFunction(storefront, 'readRememberedDetails'),
+			writeRememberedDetails: extractFunction(storefront, 'writeRememberedDetails'),
+			clearRememberedDetails: extractFunction(storefront, 'clearRememberedDetails'),
+			document: { addEventListener() {} },
+			el: (tag, attrs, children) => {
+				const node = { children, textContent: '', listeners: {}, addEventListener(type, listener) { this.listeners[type] = listener; } };
+				if (attrs && attrs.type === 'checkbox') checkbox = node;
+				if (attrs && attrs.role === 'status') feedback = node;
+				return node;
+			}
+		});
+		control(wraps);
+		return { h, inputs, checkbox, feedback };
+	}
+	const allowed = controlHarness();
+	allowed.checkbox.checked = true;
+	allowed.checkbox.listeners.change();
+	assert.equal(allowed.checkbox.checked, true, 'an explicit opt-in can precede typing');
+	assert.equal(allowed.feedback.textContent, '', 'empty fields are not a storage or permission error');
+	assert.equal(allowed.h.values.doughboss_remember_details, undefined);
+	allowed.inputs.customer_name.value = ' Synthetic ';
+	allowed.inputs.customer_name.listeners.change();
+	assert.equal(allowed.checkbox.checked, true);
+	assert.equal(JSON.parse(allowed.h.values.doughboss_remember_details).details.customer_name, 'Synthetic', 'later edits honour the earlier checkbox choice');
+	allowed.inputs.customer_name.value = '  ';
+	allowed.inputs.customer_name.listeners.change();
+	assert.equal(allowed.checkbox.checked, true, 'clearing the fields does not revoke explicit opt-in');
+	assert.equal(allowed.h.values.doughboss_remember_details, undefined, 'clearing all fields removes the previous contact record');
+	const denied = controlHarness({ permitted: false });
+	denied.checkbox.checked = true;
+	denied.checkbox.listeners.change();
+	assert.equal(denied.checkbox.checked, false, 'even an empty opt-in still requires preference permission');
+	assert.match(denied.feedback.textContent, /Allow optional device preferences/);
+	const blocked = controlHarness({ blocked: true });
+	blocked.checkbox.checked = true;
+	blocked.checkbox.listeners.change();
+	assert.equal(blocked.checkbox.checked, true, 'no persistence error is invented before there is anything to save');
+	blocked.inputs.customer_email.value = 'synthetic@example.invalid';
+	blocked.inputs.customer_email.listeners.change();
+	assert.equal(blocked.checkbox.checked, false, 'an actual failed write is reported honestly');
+	assert.match(blocked.feedback.textContent, /browser storage is unavailable/);
+	assert.equal(blocked.h.values.doughboss_remember_details, undefined);
+});
+
+
+test('2.48 remember-my-details control prefills empty fields and unticking clears storage', () => {
+	const ctx = { REMEMBER_DETAILS_KEY: 'doughboss_remember_details', REMEMBER_DETAILS_FIELDS: ['customer_name', 'customer_email', 'customer_phone'], JSON };
+	const h = preferencesHarness();
+	h.api.choose(true);
+	h.api.writeDetails({ customer_name: 'Synthetic', customer_email: 'saved@example.invalid', customer_phone: '0400000001' });
+	const store = h.values;
+	const storage = h.api;
+	const listeners = {};
+	function input(value) { return { value, listeners: {}, addEventListener(type, cb) { this.listeners[type] = cb; } }; }
+	const inputs = { customer_name: input(''), customer_email: input('typed@example.invalid'), customer_phone: input('') };
+	const wraps = {};
+	Object.keys(inputs).forEach(key => { wraps[key] = { querySelector: () => inputs[key] }; });
+	let checkbox;
+	const control = extractFunction(storefront, 'rememberDetailsControl', Object.assign({}, ctx, {
+		I18N: {},
+		document: { addEventListener: (name, listener) => { listeners[name] = listener; } },
+		rememberStorage: () => storage,
+		readRememberedDetails: extractFunction(storefront, 'readRememberedDetails', ctx),
+		writeRememberedDetails: extractFunction(storefront, 'writeRememberedDetails', ctx),
+		clearRememberedDetails: extractFunction(storefront, 'clearRememberedDetails', ctx),
+		el: (tag, attrs, children) => {
+			const node = { tag, attrs, children, listeners: {}, addEventListener(type, cb) { this.listeners[type] = cb; } };
+			if (attrs && attrs.type === 'checkbox') { checkbox = node; }
+			return node;
+		}
+	}));
+	control(wraps);
+	assert.equal(checkbox.checked, true, 'a saved preference shows as ticked');
+	assert.equal(inputs.customer_name.value, 'Synthetic');
+	assert.equal(inputs.customer_email.value, 'typed@example.invalid', 'never overwrites what the customer typed');
+	assert.equal(inputs.customer_phone.value, '0400000001');
+	inputs.customer_phone.value = '0400000002';
+	inputs.customer_phone.listeners.change();
+	assert.equal(JSON.parse(store.doughboss_remember_details).details.customer_phone, '0400000002', 'edits are saved while ticked');
+	checkbox.checked = false;
+	checkbox.listeners.change();
+	assert.equal(Object.hasOwn(store, 'doughboss_remember_details'), false, 'unticking deletes the saved details');
+	inputs.customer_name.listeners.change();
+	assert.equal(Object.hasOwn(store, 'doughboss_remember_details'), false, 'nothing is saved while unticked');
+	checkbox.checked = true;
+	listeners['doughboss:preferences-changed']({ detail: { preferences: false } });
+	assert.equal(checkbox.checked, false, 'withdrawal unticks the separate contact choice');
+	assert.equal(inputs.customer_email.value, 'typed@example.invalid', 'withdrawal does not erase transactional form fields');
+});
+
+
+test('menu search restores only offscreen tools without animation or focus changes', () => {
+	const moves = [];
+	const context = { window: { innerHeight: 640, getComputedStyle: () => ({ top: '72px' }), scrollBy: options => moves.push(options) } };
+	const restore = extractFunction(storefront, 'restoreMenuSearchPosition', context);
+	const tools = bounds => ({ getBoundingClientRect: () => bounds });
+	restore(tools({ top: 72, bottom: 180 }));
+	restore(tools({ top: 30, bottom: 150 }));
+	assert.equal(moves.length, 0, 'visible tools do not move on every keystroke');
+	restore(tools({ top: -250, bottom: -100 }));
+	assert.equal(moves.length, 1);
+	assert.equal(moves[0].top, -322);
+	assert.equal(moves[0].behavior, 'auto');
+	restore(tools({ top: 700, bottom: 800 }));
+	assert.equal(moves[1].top, 628);
+	const source = fs.readFileSync(storefront, 'utf8');
+	assert.match(source, /root\.classList\.toggle\('db-menu--searching', !!query\);\s*restoreMenuSearchPosition\(tools\);/);
+	assert.doesNotMatch(restore.toString(), /\.focus\(/);
+});
+
+test('preferences UI presents equal choices, accessible management and a persistent entry', () => {
+	let active = { focus() {} };
+	const all = [];
+	const dispatched = [];
+	const listeners = {};
+	const values = {};
+	function element(tag) {
+		const node = { tag, children: [], attributes: {}, listeners: {}, hidden: false, textContent: '',
+			appendChild(child) { this.children.push(child); return child; },
+			setAttribute(key, value) { this.attributes[key] = value; },
+			addEventListener(name, listener) { this.listeners[name] = listener; },
+			focus() { active = this; },
+			contains(child) { return child === this || this.children.some(node => node.contains(child)); },
+			querySelector(selector) { return this.children.find(child => child.tag === selector) || null; }
+		};
+		all.push(node);
+		return node;
+	}
+	const body = element('body');
+	const footer = element('footer');
+	const initialFocus = active;
+	const document = { body, readyState: 'complete', get activeElement() { return active; },
+		createElement: element, getElementById: id => all.find(node => node.id === id) || null,
+		querySelector: selector => selector === 'footer' ? footer : null,
+		dispatchEvent: event => { dispatched.push(event); }, addEventListener() {}
+	};
+	const window = { localStorage: { getItem: key => values[key] ?? null, setItem: (key, value) => { values[key] = value; }, removeItem: key => { delete values[key]; } },
+		addEventListener: (name, listener) => { listeners[name] = listener; }
+	};
+	vm.runInNewContext(fs.readFileSync(preferencesFile, 'utf8'), { window, document, Date, CustomEvent: function (type, options) { this.type = type; this.detail = options.detail; } });
+	const panel = all.find(node => node.id === 'db-device-preferences');
+	const button = text => all.find(node => node.tag === 'button' && node.textContent === text);
+	assert.equal(panel.hidden, false);
+	assert.equal(active, initialFocus, 'initial display does not steal focus');
+	const reject = button('Reject optional');
+	const allow = button('Allow preferences');
+	const manage = button('Manage');
+	assert.ok(reject && allow && manage);
+	assert.equal(reject.className, allow.className, 'choice buttons use the same presentation');
+	reject.listeners.click();
+	assert.equal(window.DoughBossPreferences.allowed(), false);
+	assert.equal(panel.hidden, true);
+	const entry = button('Privacy preferences');
+	assert.ok(footer.children.includes(entry));
+	entry.listeners.click();
+	assert.equal(panel.hidden, false);
+	assert.equal(active.tag, 'h2');
+	const checkbox = all.find(node => node.tag === 'input');
+	assert.equal(checkbox.checked, false);
+	checkbox.checked = true;
+	button('Save choices').listeners.click();
+	assert.equal(window.DoughBossPreferences.allowed(), true);
+	assert.equal(panel.hidden, true);
+	entry.listeners.click();
+	button('Close').listeners.click();
+	assert.equal(panel.hidden, true);
+	assert.equal(dispatched.filter(event => event.type === 'doughboss:preferences-changed').length, 2);
+	assert.ok(dispatched.filter(event => event.type === 'doughboss:consent').every(event => !event.detail.measurement && !event.detail.advertising));
+});
+test('2.48 order board requests a screen wake lock and fails silently', async () => {
+	const requests = [];
+	const ctx = { wakeLock: null, wakeLockPending: false, document: { hidden: false }, window: { navigator: {} },
+		navigator: { wakeLock: { request: type => { requests.push(type); return Promise.resolve({ released: false, addEventListener() {} }); } } } };
+	ctx.window.navigator = ctx.navigator;
+	const request = extractFunction(orderboard, 'requestWakeLock', ctx);
+	request();
+	request();
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(requests, ['screen'], 'one in-flight request for the screen lock');
+	for (const nav of [{}, { wakeLock: {} }, { wakeLock: { request: () => Promise.reject(new Error('NotAllowedError')) } }, { wakeLock: { request: () => { throw new Error('sync'); } } }]) {
+		const unsupported = extractFunction(orderboard, 'requestWakeLock', { wakeLock: null, wakeLockPending: false, document: { hidden: false }, window: { navigator: nav }, navigator: nav });
+		assert.doesNotThrow(() => unsupported());
+	}
+	await new Promise(resolve => setImmediate(resolve));
+	const hidden = extractFunction(orderboard, 'requestWakeLock', Object.assign({}, ctx, { wakeLock: null, document: { hidden: true } }));
+	hidden();
+	assert.equal(requests.length, 1, 'a hidden page never requests the lock');
+	const source = fs.readFileSync(orderboard, 'utf8');
+	assert.match(source, /document\.addEventListener\('visibilitychange', function \(\) \{[\s\S]*?requestWakeLock\(\);/, 're-acquired on visibilitychange');
+});
+
+test('2.48 shop status polls every 120s, refreshes early only for expired open evidence, and stops when hidden', () => {
+	const now = Date.parse('2026-10-15T01:00:00Z');
+	const open = { ordering_open: true };
+	const fresh = { pickup_status: { expires_at_utc: '2026-10-15T01:00:30Z' } };
+	const expired = { pickup_status: { expires_at_utc: '2026-10-15T00:59:59Z' } };
+	function due(watches, lastRefresh) {
+		const evidenceExpired = extractFunction(shopStatus, 'evidenceExpired', { watches, Date, Number });
+		return extractFunction(shopStatus, 'refreshDue', { REFRESH_MS: 120000, EXPIRED_REFRESH_MS: 30000, lastRefresh, evidenceExpired })(now);
+	}
+	assert.equal(due([{ config: open, location: fresh }], now - 60000), false, 'no 45-second polling any more');
+	assert.equal(due([{ config: open, location: fresh }], now - 120000), true, '120-second refresh');
+	assert.equal(due([{ config: open, location: expired }], now - 31000), true, 'expired open evidence refreshes early');
+	assert.equal(due([{ config: open, location: expired }], now - 10000), false, 'but never more often than every 30 seconds');
+	assert.equal(due([{ config: { ordering_open: false }, location: expired }], now - 60000), false, 'paused ordering needs no fresh evidence');
+	let scheduled = 0;
+	let cleared = 0;
+	const tick = extractFunction(shopStatus, 'tick', { document: { hidden: true }, tickTimer: 7, clearTimeout: () => { cleared++; },
+		paint: () => { throw new Error('must not paint while hidden'); }, scheduleTick: () => { scheduled++; }, watches: [], refreshDue: () => true, Date });
+	tick();
+	assert.equal(scheduled, 0, 'a hidden tab stops rescheduling');
+	assert.equal(cleared, 1, 'and clears the pending timer');
+	assert.match(fs.readFileSync(shopStatus, 'utf8'), /var REFRESH_MS = 120000;/);
+});
+
+test('2.48 wallet buttons validate the form synchronously before tokenize and surface failures', () => {
+	const source = fs.readFileSync(square, 'utf8');
+	const wallets = source.slice(source.indexOf('function mountWallets('), source.indexOf('function tokenizeTender('));
+	const apple = wallets.slice(wallets.indexOf("btn.addEventListener('click'"), wallets.indexOf('payments.googlePay('));
+	const google = wallets.slice(wallets.indexOf("holder.addEventListener('click'"));
+	for (const handler of [apple, google]) {
+		assert.ok(handler.indexOf('if (!formReady()) { return; }') !== -1, 'validity gate present');
+		assert.ok(handler.indexOf('formReady()') < handler.indexOf('.tokenize()'), 'validity is checked before tokenize');
+		assert.doesNotMatch(handler.slice(0, handler.indexOf('.tokenize()')), /\.then\(|await /, 'nothing asynchronous runs before tokenize (Apple Pay gesture)');
+		assert.match(handler, /\.catch\(function \(\) \{ walletFailed\(null\); \}\)/, 'a thrown tokenize shows an error');
+	}
+	assert.match(wallets, /form\.reportValidity\(\)/);
+	assert.match(wallets, /if \(!result \|\| result\.status !== 'OK' \|\| !result\.token\) \{ walletFailed\(result\); return; \}/, 'non-OK tokenize is visible');
+	assert.match(wallets, /status\.className = 'db-pay-secure db-error';/);
+});
+
+test('actual wallet click refuses a stale cart synchronously before updating or tokenizing', async () => {
+	const form = storefrontElement('form');
+	const wrap = storefrontElement('div');
+	wrap.insertBefore = (child, target) => {
+		child.parentNode = wrap;
+		wrap.children.splice(target ? wrap.children.indexOf(target) : 0, 0, child);
+		return child;
+	};
+	const total = { textContent: '$14.00' };
+	form.querySelector = selector => selector === '.db-checkout-summary-total' ? total : null;
+	let cartGuardCalls = 0;
+	form.doughbossCartGuard = () => { cartGuardCalls++; return true; };
+	form.reportValidity = () => { throw new Error('stale cart must stop before validity check'); };
+	const status = storefrontElement('p');
+	let updates = 0;
+	let tokenizations = 0;
+	const mountWallets = extractFunction(square, 'mountWallets', {
+		readDisplayedTotal: node => node === form ? '14.00' : null,
+		el: storefrontCreate,
+		squarePayments: () => Promise.resolve({
+			paymentRequest: () => ({ update: () => { updates++; } }),
+			applePay: () => Promise.resolve({ tokenize: () => { tokenizations++; return Promise.resolve({ status: 'OK', token: 'cnon:unused' }); } }),
+			googlePay: () => Promise.reject(new Error('not available'))
+		}),
+		validSquareCurrency: extractFunction(square, 'validSquareCurrency'),
+		CONFIG: { currency: 'AUD' },
+		Date,
+		Event: function Event() {}
+	});
+	mountWallets(form, {}, wrap, {}, status);
+	await new Promise(resolve => setImmediate(resolve));
+	const walletBox = wrap.children[0];
+	const apple = walletBox.children.find(node => node.className === 'db-apple-pay');
+	assert.ok(apple, 'the actual wallet listener mounted');
+	let prevented = false;
+	apple.listeners.click({ preventDefault: () => { prevented = true; } });
+	assert.equal(prevented, true);
+	assert.equal(cartGuardCalls, 1);
+	assert.equal(updates, 0, 'the wallet total is not updated after stale refusal');
+	assert.equal(tokenizations, 0, 'the wallet sheet never opens for a stale cart');
+});
+
+test('2.48 Square SDK is enqueued only on checkout pages and loads on demand elsewhere', () => {
+	const assets = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-assets.php'), 'utf8');
+	const branch = assets.slice(assets.indexOf("} elseif ( 'square' === $gateway && ! $square_hosted ) {"), assets.indexOf('Stripe Checkout is a full-page provider-hosted redirect'));
+	assert.match(branch, /if \( \$is_order_page \|\| \$this->current_post_has\( 'doughboss_cart' \) \) \{\s*wp_enqueue_script\( 'square-web-payments'/);
+	const source = fs.readFileSync(square, 'utf8');
+	const payments = source.slice(source.indexOf('function squarePayments('), source.indexOf('function mountCard('));
+	assert.match(payments, /loadApprovedSquareSdk\(\{ liveMode: CONFIG\.liveMode === true \}\)/, 'ordinary checkout reuses the exact-CDN loader');
+	assert.match(payments, /paymentsPromise = null;\s*throw err;/, 'a failed load can be retried');
+});
+
+test('2.48 theme quick wins: distinct menu/order H1 and titles, hero alts, catering notice copy', () => {
+	const theme = file => fs.readFileSync(path.resolve(__dirname, '..', 'themes', 'doughboss-final', file), 'utf8');
+	const order = theme('page-order.php');
+	assert.match(order, /\$is_menu_page = is_page\( 'menu' \);/);
+	assert.match(order, /<\?php if \( \$is_menu_page \) : \?>\s*<\?php esc_html_e\( 'Our', 'doughboss-final' \); \?> <em><\?php esc_html_e\( 'menu\.', 'doughboss-final' \); \?><\/em>/);
+	const seo = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-seo.php'), 'utf8');
+	assert.match(seo, /if \( is_page\( 'order' \) \) \{/, '/order/ has its own title copy');
+	assert.match(seo, /if \( is_page\( 'menu' \) \|\|/, '/menu/ keeps the menu title');
+	for (const file of ['page-about-us.php', 'page-locations.php', 'page-order.php', 'page-track-order.php', 'page.php']) {
+		assert.doesNotMatch(theme(file), /doughboss_final_asset_image\( '[^']+', '', array\( 'class' => 'dbf-page-hero-bg'/, file + ' hero has descriptive alt text');
+	}
+	const shortcodes = fs.readFileSync(path.resolve(__dirname, '..', 'includes', 'class-doughboss-shortcodes.php'), 'utf8');
+	assert.match(shortcodes, /'image_alt'\s*=> __\( 'Dough Boss manoush and pies fresh from the oven', 'doughboss' \)/);
+	assert.doesNotMatch(shortcodes, /class="db-mh-backdrop" src="' \. esc_url\( \$image_url \) \. '" alt=""/);
+	assert.match(shortcodes, /Pickup from Revesby · minimum %d business days’ notice/);
+	assert.match(theme('functions.php'), /Pickup from Revesby · minimum %d business days’ notice/);
+	assert.match(theme('page-catering.php'), /description="' \. \$dbf_catering_hero_description \. '"/);
+});
