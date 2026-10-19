@@ -1018,12 +1018,19 @@ db_test(
 		// Hostile definition problems are escaped.
 		$dir = sys_get_temp_dir() . '/dbgr-landing-adm-' . bin2hex( random_bytes( 4 ) ) . '/';
 		mkdir( $dir, 0777, true );
-		file_put_contents( $dir . 'x"><img src=x onerror=alert(1)>.json', '{ nope' );
+		$hostile_field = 'x"><img src=x onerror=alert(1)>.json';
+		if ( '\\' === DIRECTORY_SEPARATOR ) {
+			// NTFS forbids the hostile filename; exercise the same escaped problem sink through an unknown field.
+			file_put_contents( $dir . 'hostile.json', json_encode( array_merge( dbgr_lp_def(), array( $hostile_field => true ) ) ) );
+		} else {
+			// Preserve the original filename-derived negative control on filesystems that support it.
+			file_put_contents( $dir . $hostile_field, '{ nope' );
+		}
 		DoughBoss_Growth_Landing::set_definition_dir_override( $dir );
 		ob_start();
 		DoughBoss_Growth_Landing::render_admin_tab();
 		$html = ob_get_clean();
-		assert_not_contains( '<img', $html, 'a hostile file name is escaped' );
+		assert_not_contains( '<img', $html, 'hostile definition input is escaped' );
 		assert_contains( '&lt;img src=x onerror=alert(1)&gt;.json', $html, 'and shown as text' );
 		assert_contains( 'Some page definitions are invalid and are left out', $html, 'problems are listed' );
 		unset( $_GET['dbgr_lp'] );

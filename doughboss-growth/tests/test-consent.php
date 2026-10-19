@@ -610,13 +610,13 @@ db_test(
 		foreach ( array( 'public/js/dbgr-consent.js', 'public/js/dbgr-datalayer.js' ) as $file ) {
 			$text = file_get_contents( $root . $file );
 			assert_false( (bool) preg_match( '/googletagmanager|google-analytics|facebook|fbq\(|ttq\.|XMLHttpRequest|fetch\(|sendBeacon|new Image/', $text ), $file . ' contacts no vendor and sends nothing itself' );
-			assert_matches( "/^\\/\\*\\*.*?\\*\\/\\n\\(function \\(\\) \\{\\n\\t'use strict';/s", $text, $file . ' is an IIFE that starts with use strict' );
+			assert_matches( "/^\\/\\*\\*.*?\\*\\/\\r?\\n\\(function \\(\\) \\{\\r?\\n\\t'use strict';/s", $text, $file . ' is an IIFE that starts with use strict' );
 		}
 		$tags = file_get_contents( $root . 'includes/consent/class-doughboss-growth-tags.php' );
 		assert_same( 1, substr_count( preg_replace( '#/\*.*?\*/#s', '', $tags ), 'googletagmanager.com' ), 'the one Tag Manager host appears once in executable code' );
 		foreach ( array( 'consent', 'tags' ) as $name ) {
 			$source = file_get_contents( $root . 'includes/consent/class-doughboss-growth-' . $name . '.php' );
-			assert_matches( "/^<\\?php\\n\\/\\*\\*.*?\\*\\/\\n\\n\\/\\/ Exit if accessed directly\\.\\nif \\( ! defined\\( 'ABSPATH' \\) \\) \\{\\n\\texit;\\n\\}/s", $source, $name . ' has the ABSPATH guard' );
+			assert_matches( "/^<\\?php\\r?\\n\\/\\*\\*.*?\\*\\/\\r?\\n\\r?\\n\\/\\/ Exit if accessed directly\\.\\r?\\nif \\( ! defined\\( 'ABSPATH' \\) \\) \\{\\r?\\n\\texit;\\r?\\n\\}/s", $source, $name . ' has the ABSPATH guard' );
 			assert_matches( '/\nfinal class DoughBoss_Growth_/', $source, $name . ' is a final class' );
 			assert_false( (bool) preg_match( '/update_option|add_option|delete_option|set_transient|\$wpdb|wp_insert_post|add_role|add_cap/', $source ), $name . ' writes nothing (no option, transient, table, post, role or capability)' );
 		}

@@ -1119,29 +1119,18 @@ function dbgr_wls_seed_golden() {
  */
 function dbgr_wls_golden( $status ) {
 	$header = "id,email,first_name,mobile,store_id,status,consent_marketing,consent_text_version,consent_at_utc,confirmed_at_utc,unsubscribed_at_utc,signup_path,created_at\n";
-	$one    = <<<'CSV'
-1,a@example.com,"Ann, ""A"" Lee",'+61412345678,1,confirmed,1,wl-0123456789ab,"2026-09-01 01:02:03","2026-09-01 01:05:00",,/coming-soon/,"2026-09-01 01:02:03"
-CSV;
-	$two    = <<<'CSV'
-2,b@example.com,"Line1
-Line2",,2,pending,1,wl-0123456789ab,"2026-09-02 02:02:03",,,,"2026-09-02 02:02:03"
-CSV;
-	$three  = <<<'CSV'
-3,c@example.com,,,,unsubscribed,1,wl-0123456789ab,"2026-09-03 03:02:03","2026-09-03 03:05:00","2026-09-04 04:00:00",/coming-soon/,"2026-09-03 03:02:03"
-CSV;
-	$four   = <<<'CSV'
-4,d@example.com,"'=HYPERLINK(""x"")",'+61400000000,3,confirmed,0,wl-0123456789ab,"2026-09-05 05:02:03","2026-09-05 05:05:00",,/p/,"2026-09-05 05:02:03"
-CSV;
-	$five   = <<<'CSV'
-5,e@example.com,"O'Brien @home",,,confirmed,1,wl-0123456789ab,"2026-09-06 06:02:03","2026-09-06 06:05:00",,/coming-soon/,"2026-09-06 06:02:03"
-CSV;
+	$one    = '1,a@example.com,"Ann, ""A"" Lee",\'+61412345678,1,confirmed,1,wl-0123456789ab,"2026-09-01 01:02:03","2026-09-01 01:05:00",,/coming-soon/,"2026-09-01 01:02:03"' . "\n";
+	$two    = '2,b@example.com,"Line1' . "\n" . 'Line2",,2,pending,1,wl-0123456789ab,"2026-09-02 02:02:03",,,,"2026-09-02 02:02:03"' . "\n";
+	$three  = '3,c@example.com,,,,unsubscribed,1,wl-0123456789ab,"2026-09-03 03:02:03","2026-09-03 03:05:00","2026-09-04 04:00:00",/coming-soon/,"2026-09-03 03:02:03"' . "\n";
+	$four   = '4,d@example.com,"\'=HYPERLINK(""x"")",\'+61400000000,3,confirmed,0,wl-0123456789ab,"2026-09-05 05:02:03","2026-09-05 05:05:00",,/p/,"2026-09-05 05:02:03"' . "\n";
+	$five   = '5,e@example.com,"O\'Brien @home",,,confirmed,1,wl-0123456789ab,"2026-09-06 06:02:03","2026-09-06 06:05:00",,/coming-soon/,"2026-09-06 06:02:03"' . "\n";
 	$by     = array(
 		'all'          => array( $one, $two, $three, $four, $five ),
 		'confirmed'    => array( $one, $four, $five ),
 		'pending'      => array( $two ),
 		'unsubscribed' => array( $three ),
 	);
-	return $header . implode( "\n", $by[ $status ] ) . "\n";
+	return $header . implode( '', $by[ $status ] );
 }
 
 /**

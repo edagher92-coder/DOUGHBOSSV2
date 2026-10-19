@@ -6,10 +6,13 @@ declared size, and no file sits in assets/hero without being named there. Videos
 with no upload cap can ship them in the zip); the 1.9 MB ceiling still applies to the whole zip."""
 import hashlib, json, os, re, struct, sys, zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, 'doughboss-growth-media')
+# The tracked source folder is media-plugin; the installable root keeps its slug.
+SRC = os.path.join(HERE, 'media-plugin')
 MAXB = 1_900_000
-main = open(os.path.join(SRC, 'doughboss-growth-media.php')).read()
-readme = open(os.path.join(SRC, 'readme.txt')).read()
+if len(sys.argv) > 2:
+    sys.exit('Usage: python build_media_zip.py [new-output.zip]')
+main = open(os.path.join(SRC, 'doughboss-growth-media.php'), encoding='utf-8').read()
+readme = open(os.path.join(SRC, 'readme.txt'), encoding='utf-8').read()
 vs = {re.search(r'^ \* Version:\s*(\S+)', main, re.M).group(1),
       re.search(r'^Stable tag:\s*(\S+)', readme, re.M).group(1),
       re.search(r'^== Changelog ==\r?\n\r?\n= ([0-9.]+) =', readme, re.M).group(1)}
@@ -55,8 +58,9 @@ hero_present = {f for f in os.listdir(hero_dir) if f != 'hero.json'}
 assert hero_present <= hero_named, ('unnamed file in assets/hero', hero_present - hero_named)
 assert 'dbgr-hero-poster-1080.webp' in hero_present, 'the required 1080 poster is missing'
 
-out = os.path.join(HERE, 'doughboss-growth-media-%s.zip' % ver)
-if os.path.exists(out): os.remove(out)
+out = os.path.abspath(sys.argv[1]) if len(sys.argv) == 2 else os.path.join(HERE, 'doughboss-growth-media-%s.zip' % ver)
+if os.path.lexists(out):
+    sys.exit('Refusing to overwrite existing archive: ' + out)
 entries = []
 for root, _, files in os.walk(SRC):
     for f in files:
@@ -65,9 +69,11 @@ for root, _, files in os.walk(SRC):
         assert not rel.startswith('.') and '/.' not in rel
         entries.append(('doughboss-growth-media/' + rel, full))
 entries.sort()
-with zipfile.ZipFile(out, 'w') as z:
+with zipfile.ZipFile(out, 'x') as z:
     for arc, full in entries:
         zi = zipfile.ZipInfo(arc, date_time=(2026, 1, 1, 0, 0, 0))
+        # Do not let the build host change the ZIP creator platform or permissions.
+        zi.create_system = 3
         zi.external_attr = 0o100644 << 16
         zi.compress_type = zipfile.ZIP_STORED if arc.endswith(('.avif', '.webp', '.jpg', '.png', '.mp4')) else zipfile.ZIP_DEFLATED
         z.writestr(zi, open(full, 'rb').read())

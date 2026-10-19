@@ -370,7 +370,11 @@ db_test(
 		}
 
 		$plugin = dbgr_scripts_copy_plugin();
-		symlink( '/etc/hostname', $plugin . '/includes/linked.php' );
+		$target = $plugin . '/includes/linked-target.php';
+		$link   = $plugin . '/includes/linked.php';
+		file_put_contents( $target, "<?php\n" );
+		symlink( $target, $link );
+		assert_true( is_link( $link ), 'fixture is a real symlink to an existing temporary plugin file' );
 		$result = dbgr_scripts_run( $plugin . '/scripts/build-zip.php', array( $plugin . '/out.zip' ) );
 		assert_same( 1, $result['exit'], 'a symlink inside a runtime directory is refused' );
 		assert_contains( 'linked', $result['err'], 'with the link message' );
@@ -548,19 +552,20 @@ db_test(
 		$hits = array();
 		$iter = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $dbgr_plugin_dir, FilesystemIterator::SKIP_DOTS ) );
 		foreach ( $iter as $file ) {
-			$path = $file->getPathname();
-			if ( ! $file->isFile() || preg_match( '#/(dist|node_modules|vendor|docs)/#', $path ) || false !== strpos( $path, '/tests/test-core-scripts.php' ) ) {
+			$path     = $file->getPathname();
+			$relative = str_replace( DIRECTORY_SEPARATOR, '/', substr( $path, strlen( $dbgr_plugin_dir ) + 1 ) );
+			if ( ! $file->isFile() || preg_match( '#^(?:dist|node_modules|vendor|docs)/#', $relative ) || 'tests/test-core-scripts.php' === $relative ) {
 				continue;
 			}
 			$text = strtolower( (string) file_get_contents( $path ) );
 			foreach ( $banned as $needle ) {
 				if ( false !== strpos( $text, strtolower( $needle ) ) ) {
-					$hits[] = str_replace( $dbgr_plugin_dir . '/', '', $path ) . ' has "' . $needle . '"';
+					$hits[] = $relative . ' has "' . $needle . '"';
 				}
 			}
 			// The word "hero" must not appear in settings, admin, readme, scripts or the main file.
-			if ( preg_match( '#/(includes/class-doughboss-growth-(settings|activator)|admin/|readme\.txt|doughboss-growth\.php|scripts/)#', $path ) && false !== strpos( $text, 'hero' ) ) {
-				$hits[] = str_replace( $dbgr_plugin_dir . '/', '', $path ) . ' mentions the cancelled hero work';
+			if ( preg_match( '#^(?:includes/class-doughboss-growth-(?:settings|activator)|admin/|readme\.txt|doughboss-growth\.php|scripts/)#', $relative ) && false !== strpos( $text, 'hero' ) ) {
+				$hits[] = $relative . ' mentions the cancelled hero work';
 			}
 		}
 		assert_same( array(), $hits, 'no cancelled-scope reference' );

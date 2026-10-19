@@ -6,7 +6,7 @@
  *    (the ES5 dispatcher trusts that file as its allow-list, so a stale copy would let a wrong name or parameter through).
  */
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EVENT_NAMES, type EventParams } from "@/lib/analytics/events";
 import { EVENTS_JSON_PATH, buildEvents, render } from "../../scripts/wp-oracle/export-events";
@@ -70,6 +70,6 @@ describe("export-events", () => {
   it("the recorded source hash is the hash of events.ts today", () => {
     const parsed = JSON.parse(readFileSync(EVENTS_JSON_PATH, "utf8")) as { source_sha256: string };
     expect(parsed.source_sha256).toBe(buildEvents().source_sha256);
-    expect(resolve(EVENTS_JSON_PATH).endsWith("doughboss-growth/content/events.json")).toBe(true);
+    expect(resolve(EVENTS_JSON_PATH).endsWith(join("doughboss-growth", "content", "events.json"))).toBe(true);
   });
 });
