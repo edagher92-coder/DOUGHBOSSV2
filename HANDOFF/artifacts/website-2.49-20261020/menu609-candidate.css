@@ -1,0 +1,40 @@
+/* DoughBoss premium menu presentation — 19 October 2026.
+ * Existing header/tools/decoration retained; verified plugin owns card density.
+ * Restore the private pre-release snippet609 backup to roll back this overlay.
+ */
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-page-hero--order .dbf-page-hero-inner{min-height:144px;padding-block:20px 26px}
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-page-hero--order .dbf-display{font-size:clamp(2.75rem,5vw,4rem);line-height:.95}
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-order-counter{border-radius:18px;box-shadow:0 8px 24px #20170d0c}
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-order-counter__shop,body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-order-counter__status{padding:16px 20px}
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-order-counter .db-shop{max-width:none;padding:0;border:0;background:transparent;box-shadow:none}
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-order-counter .db-ordering-status{width:100%;min-height:0;padding:0;margin:0!important;border:0;background:transparent;box-shadow:none;text-align:left}
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-order-counter .db-ordering-status strong{font-size:clamp(1.5rem,2.4vw,1.9rem);line-height:1.1}
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-order-counter .db-ordering-status p{margin:8px 0 0;color:#5e574e;font-size:.95rem;line-height:1.5}
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-storefront{padding:0;border:0;background:transparent;box-shadow:none}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-menu-tools{gap:.5rem 1rem;padding:12px;border:1px solid #ded7cc;border-radius:20px;background:#faf8f3;box-shadow:0 6px 20px #20170d0a}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-menu-search{min-height:50px;padding-right:3.25rem;color:#171310;background:#fff;font-size:1rem}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-menu-search-clear{min-width:44px;min-height:44px}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-menu-search-status{color:#5e574e;font-size:.875rem;line-height:1.5;white-space:normal}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-jump{min-height:46px;padding:.6rem 1rem;font-size:1.05rem}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-category{margin:2.5rem 0 1.5rem;font-size:clamp(2rem,4vw,3rem)}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-card:not(.db-card--compact){min-width:0;border:1px solid #ded7cc;border-radius:22px;background:#fff;box-shadow:0 4px 14px #20170d0c}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-card-title{margin:0;overflow-wrap:anywhere}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-card-desc:not([hidden]){display:block;margin:0;color:#5e574e;font-size:16px;line-height:1.45}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-dietary-badges{flex-wrap:wrap;gap:6px}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-dietary-badge{padding:5px 8px;font-size:.8rem;line-height:1.3}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-card-foot{gap:.75rem}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-price{white-space:nowrap}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] :is(input,button):focus-visible{outline:3px solid #b93218;outline-offset:3px}
+@media(max-width:899px){
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-menu-tools{grid-template-columns:minmax(0,1fr)}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-menu-search-wrap{grid-column:1;grid-row:1}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-menu-search-status{grid-column:1;grid-row:2}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-jumpbar{grid-column:1;grid-row:3}
+}
+@media(max-width:560px){
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-page-hero--order .dbf-page-hero-inner{min-height:132px;padding-block:18px 24px}
+body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-order-counter__shop,body.doughboss-order-page:not(.db-approved-preorder-mode) .dbf-order-counter__status{padding:14px}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-menu-tools{padding:10px;border-radius:16px}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-card:not(.db-card--compact){border-radius:16px}
+body.doughboss-order-page:not(.db-approved-preorder-mode) [data-doughboss-menu] .db-dietary-badge{font-size:.75rem}
+}
