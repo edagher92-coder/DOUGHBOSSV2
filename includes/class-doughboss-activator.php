@@ -1560,5 +1560,34 @@ class DoughBoss_Activator {
 		} elseif ( ! $staff->has_cap( 'clock_doughboss_staff' ) ) {
 			$staff->add_cap( 'clock_doughboss_staff' );
 		}
+
+		// Read-only reporting role for an API-only integration account. It holds
+		// `read` and view_doughboss_reports and nothing else: no kitchen, voucher,
+		// clock or management capability. REST permission callbacks accept the
+		// capability on five GET routes only and it opens no wp-admin screen. The
+		// role is plugin-owned, so any elevated DoughBoss capability found on it is
+		// removed on every upgrade (fail closed).
+		$reports = get_role( 'doughboss_reports' );
+		if ( ! $reports ) {
+			add_role(
+				'doughboss_reports',
+				__( 'DoughBoss Reports (read-only)', 'doughboss' ),
+				array(
+					'read'                   => true,
+					'view_doughboss_reports' => true,
+				)
+			);
+		} else {
+			foreach ( array( 'read', 'view_doughboss_reports' ) as $reports_cap ) {
+				if ( ! $reports->has_cap( $reports_cap ) ) {
+					$reports->add_cap( $reports_cap );
+				}
+			}
+			foreach ( array( 'manage_doughboss', 'manage_doughboss_kds', 'redeem_doughboss_vouchers', 'clock_doughboss_staff' ) as $elevated_cap ) {
+				if ( $reports->has_cap( $elevated_cap ) ) {
+					$reports->remove_cap( $elevated_cap );
+				}
+			}
+		}
 	}
 }

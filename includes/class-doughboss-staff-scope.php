@@ -19,6 +19,7 @@ final class DoughBoss_Staff_Scope {
 	const ROSTER_META   = 'doughboss_staff_roster';
 	const NONCE_ACTION  = 'doughboss_staff_location';
 	const NONCE_NAME    = 'doughboss_staff_location_nonce';
+	const REPORTS_CAP   = 'view_doughboss_reports';
 
 	/** @return void */
 	public static function init() {
@@ -124,6 +125,45 @@ final class DoughBoss_Staff_Scope {
 			return new WP_Error( 'doughboss_order_not_found', __( 'Order not found for this kitchen.', 'doughboss' ), array( 'status' => 404 ) );
 		}
 		return true;
+	}
+
+	/**
+	 * Whether the current user is a read-only reporting account.
+	 *
+	 * True only for an account that holds view_doughboss_reports and none of the
+	 * kitchen or management capabilities. An account that also holds a kitchen or
+	 * management capability keeps that capability's scope and rules unchanged, so
+	 * adding this capability to such an account never widens what it can do.
+	 *
+	 * Note that current_location_id(), effective_location_id() and
+	 * can_access_order() deliberately still refuse a reporting account: every
+	 * write path uses them, so a reporting account can never act on an order.
+	 *
+	 * @return bool
+	 */
+	public static function is_reports_reader() {
+		return current_user_can( self::REPORTS_CAP )
+			&& ! current_user_can( 'manage_doughboss' )
+			&& ! current_user_can( 'manage_options' )
+			&& ! current_user_can( 'manage_doughboss_kds' );
+	}
+
+	/**
+	 * Resolve the shop filter for a READ-ONLY feed.
+	 *
+	 * Only the read callbacks that the reporting account may call use this
+	 * method. A reporting account sees all shops and may narrow to one with an
+	 * optional location filter, exactly like a manager. Every other account is
+	 * resolved by effective_location_id(), so kitchen scoping is unchanged.
+	 *
+	 * @param int $requested Requested location; 0 means all shops.
+	 * @return int|WP_Error Effective location, or 0 for an all-shop view.
+	 */
+	public static function effective_read_location_id( $requested = 0 ) {
+		if ( self::is_reports_reader() ) {
+			return absint( $requested );
+		}
+		return self::effective_location_id( $requested );
 	}
 
 	/**

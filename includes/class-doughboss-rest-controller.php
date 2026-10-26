@@ -46,6 +46,9 @@ class DoughBoss_REST_Controller {
 		// Allow the standalone staff console (separate origin) to call our routes.
 		add_action( 'rest_api_init', array( $this, 'enable_cors' ), 15 );
 		add_filter( 'rest_post_dispatch', array( $this, 'protect_tracking_response' ), 10, 3 );
+		// Fail-closed backstop for the read-only reports account: on this plugin's
+		// namespace it may call only the five whitelisted GET routes.
+		add_filter( 'rest_pre_dispatch', array( $this, 'guard_reports_reader' ), 10, 3 );
 	}
 
 	/**
@@ -614,7 +617,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_status' ),
-				'permission_callback' => array( $this, 'verify_admin' ),
+				'permission_callback' => array( $this, 'verify_admin_or_reports_read' ),
 			)
 		);
 
@@ -953,7 +956,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'admin_orders' ),
-				'permission_callback' => array( $this, 'verify_board_access' ),
+				'permission_callback' => array( $this, 'verify_board_read_access' ),
 				'args'                => array(
 					'status'   => array(
 						'default'           => '',
@@ -988,7 +991,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'admin_board_summary' ),
-				'permission_callback' => array( $this, 'verify_board_access' ),
+				'permission_callback' => array( $this, 'verify_board_read_access' ),
 				'args'                => array(
 					'location_id' => array(
 						'default'           => 0,
@@ -1068,7 +1071,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'admin_preorder_requests' ),
-				'permission_callback' => array( $this, 'verify_board_access' ),
+				'permission_callback' => array( $this, 'verify_board_read_access' ),
 				'args'                => array(
 					'location_id' => array( 'default' => 0, 'sanitize_callback' => 'absint' ),
 					'per_page'    => array( 'default' => 100, 'sanitize_callback' => 'absint' ),
@@ -1301,7 +1304,7 @@ class DoughBoss_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'admin_catering_board' ),
-				'permission_callback' => array( $this, 'verify_board_access' ),
+				'permission_callback' => array( $this, 'verify_board_read_access' ),
 				'args'                => array(
 					'location_id' => array(
 						'default'           => 0,
@@ -1582,6 +1585,103 @@ class DoughBoss_REST_Controller {
 			return true;
 		}
 		return new WP_Error( 'doughboss_board_key_required', __( 'This Order Board request needs the current staff access key.', 'doughboss' ), array( 'status' => 403 ) );
+	}
+
+	/**
+	 * The only routes the read-only reports account may call. All are GET.
+	 *
+	 * @return string[]
+	 */
+	private static function reports_read_routes() {
+		$base = '/' . DOUGHBOSS_REST_NAMESPACE;
+		return array(
+			$base . '/status',
+			$base . '/admin/board-summary',
+			$base . '/admin/preorder-requests',
+			$base . '/admin/orders',
+			$base . '/admin/catering-board',
+		);
+	}
+
+	/**
+	 * Whether a request is a whitelisted read for the reports account.
+	 *
+	 * Fails closed: anything other than a plain GET to one of the five routes
+	 * returns false, including HEAD, OPTIONS and every write method.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return bool
+	 */
+	private function is_reports_read_request( WP_REST_Request $request ) {
+		if ( 'GET' !== strtoupper( (string) $request->get_method() ) ) {
+			return false;
+		}
+		return in_array( untrailingslashit( (string) $request->get_route() ), self::reports_read_routes(), true );
+	}
+
+	/**
+	 * Permission check for GET /status: the existing staff check, plus the
+	 * read-only reports account on a GET request.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return bool|WP_Error
+	 */
+	public function verify_admin_or_reports_read( WP_REST_Request $request ) {
+		$allowed = $this->verify_admin();
+		if ( ! is_wp_error( $allowed ) ) {
+			return $allowed;
+		}
+		if ( DoughBoss_Staff_Scope::is_reports_reader() && $this->is_reports_read_request( $request ) ) {
+			return true;
+		}
+		return $allowed;
+	}
+
+	/**
+	 * Permission check for the four read-only board feeds.
+	 *
+	 * Every other account goes through verify_board_access() unchanged,
+	 * including the shop assignment and the optional board key for kitchen-only
+	 * users. The read-only reports account is an API (Application Password)
+	 * account that never uses the board bookmark, so the board key is not
+	 * required for it; it is allowed on a whitelisted GET only.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return bool|WP_Error
+	 */
+	public function verify_board_read_access( WP_REST_Request $request ) {
+		if ( DoughBoss_Staff_Scope::is_reports_reader() ) {
+			if ( $this->is_reports_read_request( $request ) ) {
+				return true;
+			}
+			return new WP_Error( 'doughboss_forbidden', __( 'You are not allowed to do that.', 'doughboss' ), array( 'status' => 403 ) );
+		}
+		return $this->verify_board_access( $request );
+	}
+
+	/**
+	 * rest_pre_dispatch backstop: on this plugin's namespace the read-only
+	 * reports account may call only the whitelisted GET routes. This refuses any
+	 * other route or method before routing, including public POST routes and any
+	 * route added in future with a permissive permission callback.
+	 *
+	 * @param mixed           $result  Short-circuit value; null to continue.
+	 * @param WP_REST_Server  $server  Server.
+	 * @param WP_REST_Request $request Request.
+	 * @return mixed|WP_Error
+	 */
+	public function guard_reports_reader( $result, $server, $request ) {
+		unset( $server );
+		if ( null !== $result || ! $request instanceof WP_REST_Request ) {
+			return $result;
+		}
+		if ( 0 !== strpos( (string) $request->get_route(), '/' . DOUGHBOSS_REST_NAMESPACE . '/' ) ) {
+			return $result;
+		}
+		if ( ! DoughBoss_Staff_Scope::is_reports_reader() || $this->is_reports_read_request( $request ) ) {
+			return $result;
+		}
+		return new WP_Error( 'doughboss_reports_read_only', __( 'This account is read-only and cannot use this endpoint.', 'doughboss' ), array( 'status' => 403 ) );
 	}
 
 	/**
@@ -6966,7 +7066,7 @@ class DoughBoss_REST_Controller {
 		// No status/history filter: preserve the existing live-board behaviour
 		// exactly (active orders only, oldest first, location-scoped).
 		if ( '' === $status && ! $history ) {
-			$location_id = DoughBoss_Staff_Scope::effective_location_id( $request->get_param( 'location_id' ) );
+			$location_id = DoughBoss_Staff_Scope::effective_read_location_id( $request->get_param( 'location_id' ) );
 			if ( is_wp_error( $location_id ) ) {
 				return $location_id;
 			}
@@ -7013,7 +7113,7 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function admin_board_summary( WP_REST_Request $request ) {
-		$location_id = DoughBoss_Staff_Scope::effective_location_id( $request->get_param( 'location_id' ) );
+		$location_id = DoughBoss_Staff_Scope::effective_read_location_id( $request->get_param( 'location_id' ) );
 		if ( is_wp_error( $location_id ) ) {
 			return $location_id;
 		}
@@ -7118,7 +7218,7 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function admin_preorder_requests( WP_REST_Request $request ) {
-		$location_id = DoughBoss_Staff_Scope::effective_location_id( $request->get_param( 'location_id' ) );
+		$location_id = DoughBoss_Staff_Scope::effective_read_location_id( $request->get_param( 'location_id' ) );
 		if ( is_wp_error( $location_id ) ) {
 			return $location_id;
 		}
@@ -7549,7 +7649,7 @@ class DoughBoss_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function admin_catering_board( WP_REST_Request $request ) {
-		$location_id = DoughBoss_Staff_Scope::effective_location_id( $request->get_param( 'location_id' ) );
+		$location_id = DoughBoss_Staff_Scope::effective_read_location_id( $request->get_param( 'location_id' ) );
 		if ( is_wp_error( $location_id ) ) {
 			return $location_id;
 		}

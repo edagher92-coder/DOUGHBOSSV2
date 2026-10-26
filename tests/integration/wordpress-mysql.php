@@ -7180,6 +7180,205 @@ unset( $GLOBALS['db_split_recovery_response'], $GLOBALS['db_split_recovery_obser
 	}
 } )();
 
+// 2.52.0 read-only reports role: real WordPress role creation on upgrade, real
+// REST dispatch (route registration, permission callbacks and the namespace
+// guard) and real shop scoping. Synthetic users, shops and requests only; the
+// disposable site and its settings are restored below.
+( function () {
+	global $wpdb;
+	if ( ! function_exists( 'wp_delete_user' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/user.php';
+	}
+	$saved_user    = get_current_user_id();
+	$saved_options = get_option( DoughBoss_Settings::OPTION_KEY, array() );
+	$users         = array();
+	$shops         = array();
+	try {
+		// Upgrade path: a site still at database 1.31.0 gains the role on the next migration run.
+		remove_role( 'doughboss_reports' );
+		db_integration_same( null, get_role( 'doughboss_reports' ), 'reports role is absent before the upgrade' );
+		delete_option( 'doughboss_migration_lock' );
+		update_option( 'doughboss_db_version', '1.31.0' );
+		DoughBoss_Migrations::run();
+		db_integration_same( DOUGHBOSS_DB_VERSION, (string) get_option( 'doughboss_db_version' ), 'upgrade from 1.31.0 reaches the current database version' );
+		$reports_role = get_role( 'doughboss_reports' );
+		$reports_caps = $reports_role ? array_keys( array_filter( $reports_role->capabilities ) ) : array();
+		sort( $reports_caps );
+		db_integration_same( array( 'read', 'view_doughboss_reports' ), $reports_caps, 'upgrade creates the reports role with only read and view_doughboss_reports' );
+		db_integration_same( 'DoughBoss Reports (read-only)', (string) wp_roles()->role_names['doughboss_reports'], 'reports role display name' );
+		$reports_role->add_cap( 'manage_doughboss_kds' );
+		DoughBoss_Activator::add_capabilities();
+		db_integration_same( false, (bool) get_role( 'doughboss_reports' )->has_cap( 'manage_doughboss_kds' ), 'a tampered reports role is stripped of the kitchen capability on the next upgrade' );
+		$kitchen_caps = array_keys( array_filter( get_role( 'doughboss_kitchen' )->capabilities ) );
+		sort( $kitchen_caps );
+		db_integration_same( array( 'clock_doughboss_staff', 'manage_doughboss_kds', 'read', 'redeem_doughboss_vouchers' ), $kitchen_caps, 'kitchen role capabilities are unchanged' );
+
+		// Fixtures: two active shops, one pre-order request in each, and the four users.
+		$shop_a = DoughBoss_Locations::create( array( 'name' => 'Reports Shop A', 'slug' => 'reports-shop-a', 'is_active' => 1, 'sort_order' => 90 ) );
+		$shop_b = DoughBoss_Locations::create( array( 'name' => 'Reports Shop B', 'slug' => 'reports-shop-b', 'is_active' => 1, 'sort_order' => 91 ) );
+		$shops  = array( $shop_a, $shop_b );
+		db_integration_assert( $shop_a > 0 && $shop_b > 0, 'reports fixture shops are stored' );
+		// Synthetic copies of an existing pending pre-order request and an existing
+		// live board order, moved into each fixture shop. (Creating a request through
+		// the public path needs a live pre-order policy and a named Revesby/Bankstown/
+		// Roselands shop, which is not what this role test is about.)
+		$clone_order = function ( $template, $shop_id, $tag ) use ( $wpdb ) {
+			if ( ! is_array( $template ) ) {
+				return 0;
+			}
+			unset( $template['id'] );
+			$template['location_id']       = (int) $shop_id;
+			$template['order_number']      = 'RR-' . $tag;
+			$template['checkout_key']      = hash( 'sha256', 'reports-role|' . $tag );
+			$template['payment_intent_id'] = null;
+			$template['source_request_id'] = null;
+			return false === $wpdb->insert( $wpdb->prefix . 'doughboss_orders', $template ) ? 0 : (int) $wpdb->insert_id; // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		};
+		$orders_table      = $wpdb->prefix . 'doughboss_orders';
+		$request_template  = $wpdb->get_row( "SELECT * FROM {$orders_table} WHERE order_source = 'preorder_request' AND status = 'pending' ORDER BY id DESC LIMIT 1", ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$board_template    = $wpdb->get_row( "SELECT * FROM {$orders_table} WHERE order_source = 'web' AND status NOT IN ( 'completed', 'cancelled' ) ORDER BY id DESC LIMIT 1", ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$id_a    = $clone_order( $request_template, $shop_a, 'request-a' );
+		$id_b    = $clone_order( $request_template, $shop_b, 'request-b' );
+		$board_a = $clone_order( $board_template, $shop_a, 'board-a' );
+		$board_b = $clone_order( $board_template, $shop_b, 'board-b' );
+		db_integration_assert( $id_a > 0 && $id_b > 0 && $board_a > 0 && $board_b > 0, 'reports fixture orders are stored' );		$make_user = function ( $login, $role, $shop = 0 ) use ( &$users ) {
+			$id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => wp_generate_password( 24 ), 'user_email' => $login . '@example.invalid', 'role' => $role ) );
+			if ( is_wp_error( $id ) ) {
+				return 0;
+			}
+			$users[] = (int) $id;
+			if ( $shop ) {
+				update_user_meta( $id, DoughBoss_Staff_Scope::LOCATION_META, (int) $shop );
+			}
+			return (int) $id;
+		};
+		$reports_id = $make_user( 'db-reports-role-reader', 'doughboss_reports' );
+		$kitchen_id = $make_user( 'db-reports-role-kitchen', 'doughboss_kitchen', $shop_a );
+		$admin_id   = $make_user( 'db-reports-role-admin', 'administrator' );
+		db_integration_assert( $reports_id > 0 && $kitchen_id > 0 && $admin_id > 0, 'reports fixture users are stored' );
+		$call = function ( $user_id, $method, $path, array $params = array(), array $headers = array() ) {
+			wp_set_current_user( $user_id );
+			$request = new WP_REST_Request( $method, '/doughboss/v1' . $path );
+			foreach ( $params as $key => $value ) {
+				$request->set_param( $key, $value );
+			}
+			$request->set_header( 'X-WP-Nonce', wp_create_nonce( 'wp_rest' ) );
+			foreach ( $headers as $name => $value ) {
+				$request->set_header( $name, $value );
+			}
+			$response = rest_do_request( $request );
+			wp_set_current_user( 0 );
+			return $response;
+		};
+		$ids_in = function ( $response ) {
+			$data = $response->get_data();
+			return isset( $data['data'] ) && is_array( $data['data'] ) ? array_map( 'intval', wp_list_pluck( $data['data'], 'id' ) ) : array();
+		};
+
+		// The reports role has no other plugin capability.
+		foreach ( array( 'manage_doughboss', 'manage_doughboss_kds', 'redeem_doughboss_vouchers', 'clock_doughboss_staff', 'manage_options' ) as $other_cap ) {
+			db_integration_same( false, user_can( $reports_id, $other_cap ), 'reports account does not hold ' . $other_cap );
+		}
+		db_integration_same( true, user_can( $reports_id, 'view_doughboss_reports' ), 'reports account holds view_doughboss_reports' );
+
+		// Allowed: the five GET routes, every shop, optional shop filter.
+		$five = array( '/status', '/admin/board-summary', '/admin/preorder-requests', '/admin/orders', '/admin/catering-board' );
+		foreach ( $five as $path ) {
+			$response = $call( $reports_id, 'GET', $path, array( 'per_page' => 200 ) );
+			db_integration_same( 200, $response->get_status(), 'reports account may GET ' . $path );
+		}
+		$all_ids = $ids_in( $call( $reports_id, 'GET', '/admin/preorder-requests', array( 'per_page' => 200 ) ) );
+		db_integration_same( array( true, true ), array( in_array( $id_a, $all_ids, true ), in_array( $id_b, $all_ids, true ) ), 'reports account sees pre-order requests from every shop' );
+		$only_b = $ids_in( $call( $reports_id, 'GET', '/admin/preorder-requests', array( 'per_page' => 200, 'location_id' => $shop_b ) ) );
+		db_integration_same( array( false, true ), array( in_array( $id_a, $only_b, true ), in_array( $id_b, $only_b, true ) ), 'reports account may narrow to one shop' );
+		$board_ids = $ids_in( $call( $reports_id, 'GET', '/admin/orders' ) );
+		db_integration_same( array( true, true ), array( in_array( $board_a, $board_ids, true ), in_array( $board_b, $board_ids, true ) ), 'reports account sees live board orders from every shop' );		foreach ( array( '/admin/board-summary', '/admin/catering-board', '/admin/orders' ) as $path ) {
+			db_integration_same( 200, $call( $reports_id, 'GET', $path, array( 'location_id' => $shop_a ) )->get_status(), 'reports account may filter ' . $path . ' to one shop' );
+		}
+
+		// Denied: everything else, with the order left untouched.
+		$before = DoughBoss_Order::get( $id_a );
+		$denied = array(
+			array( 'POST', '/admin/order/' . $id_a . '/status', array( 'status' => 'confirmed', 'expected_version' => 1, 'event_key' => 'reports-role' ) ),
+			array( 'POST', '/admin/order/' . $id_a . '/ack', array() ),
+			array( 'POST', '/admin/order/' . $id_a . '/accept', array( 'expected_version' => 1, 'event_key' => 'reports-role' ) ),
+			array( 'POST', '/admin/order/' . $id_a . '/delay', array( 'expected_version' => 1, 'event_key' => 'reports-role' ) ),
+			array( 'POST', '/admin/preorder/' . $id_a . '/decision', array( 'decision' => 'reject', 'expected_version' => 1, 'event_key' => 'reports-role' ) ),
+			array( 'POST', '/admin/preorder/' . $id_a . '/payment-link', array( 'mode' => 'view' ) ),
+			array( 'GET', '/admin/preorder/' . $id_a . '/pickup-options', array( 'expected_version' => 1, 'contact_confirmed' => true ) ),
+			array( 'GET', '/admin/vouchers', array() ),
+			array( 'POST', '/voucher/issue', array() ),
+			array( 'POST', '/voucher/redeem', array() ),
+			array( 'POST', '/voucher/scan', array() ),
+			array( 'GET', '/voucher/activity', array() ),
+			array( 'GET', '/admin/square-dashboard', array() ),
+			array( 'GET', '/admin/square-catalogue', array() ),
+			array( 'GET', '/admin/catering', array() ),
+			array( 'POST', '/admin/catering/1/status', array() ),
+			array( 'GET', '/auth/me', array() ),
+			array( 'POST', '/cart/add', array() ),
+			array( 'POST', '/checkout', array() ),
+			array( 'POST', '/admin/orders', array() ),
+			array( 'PUT', '/admin/orders', array() ),
+			array( 'DELETE', '/admin/orders', array() ),
+			array( 'POST', '/status', array() ),
+			array( 'POST', '/admin/board-summary', array() ),
+			array( 'POST', '/admin/preorder-requests', array() ),
+			array( 'POST', '/admin/catering-board', array() ),
+		);
+		foreach ( $denied as $case ) {
+			$response = $call( $reports_id, $case[0], $case[1], $case[2] );
+			db_integration_same( 403, $response->get_status(), 'reports account is refused ' . $case[0] . ' ' . $case[1] );
+		}
+		// Order history and status filters stay owner-only.
+		foreach ( array( array( 'history' => '1' ), array( 'status' => 'completed' ) ) as $filter ) {
+			$response = $call( $reports_id, 'GET', '/admin/orders', $filter );
+			db_integration_same( 403, $response->get_status(), 'reports account is refused order history ' . wp_json_encode( $filter ) );
+		}
+		$after = DoughBoss_Order::get( $id_a );
+		db_integration_same( array( (string) $before->status, (int) $before->version ), array( (string) $after->status, (int) $after->version ), 'refused write attempts leave the order unchanged' );
+
+		// Owners keep history; kitchen accounts stay inside their assigned shop.
+		db_integration_same( 200, $call( $admin_id, 'GET', '/admin/orders', array( 'status' => 'completed' ) )->get_status(), 'administrator still reads order history' );
+		foreach ( $five as $path ) {
+			db_integration_same( 200, $call( $admin_id, 'GET', $path )->get_status(), 'administrator still reads ' . $path );
+		}
+		$kitchen_ids = $ids_in( $call( $kitchen_id, 'GET', '/admin/preorder-requests', array( 'per_page' => 200 ) ) );
+		db_integration_same( array( true, false ), array( in_array( $id_a, $kitchen_ids, true ), in_array( $id_b, $kitchen_ids, true ) ), 'kitchen account sees only its assigned shop' );
+		$kitchen_board = $ids_in( $call( $kitchen_id, 'GET', '/admin/orders' ) );
+		db_integration_same( array( true, false ), array( in_array( $board_a, $kitchen_board, true ), in_array( $board_b, $kitchen_board, true ) ), 'kitchen account sees only its assigned shop on the live board' );		foreach ( array( '/admin/board-summary', '/admin/preorder-requests', '/admin/orders', '/admin/catering-board' ) as $path ) {
+			db_integration_same( 403, $call( $kitchen_id, 'GET', $path, array( 'location_id' => $shop_b ) )->get_status(), 'kitchen account is refused ' . $path . ' for another shop' );
+			db_integration_same( 200, $call( $kitchen_id, 'GET', $path, array( 'location_id' => $shop_a ) )->get_status(), 'kitchen account may read ' . $path . ' for its own shop' );
+		}
+		db_integration_same( 404, $call( $kitchen_id, 'POST', '/admin/order/' . $id_b . '/ack' )->get_status(), 'kitchen account cannot act on another shop order' );
+		db_integration_same( 200, $call( $kitchen_id, 'POST', '/admin/order/' . $id_a . '/ack' )->get_status(), 'kitchen account can still act on its own shop order' );
+		db_integration_same( 200, $call( $kitchen_id, 'GET', '/auth/me' )->get_status(), 'kitchen account still reaches the staff probe' );
+
+		// Board key: kitchen accounts need it, the API-only reports account does not.
+		$keyed                       = $saved_options;
+		$keyed['board_access_key']   = hash( 'sha256', 'reports-role-secret' );
+		update_option( DoughBoss_Settings::OPTION_KEY, $keyed, false );
+		$no_key = $call( $kitchen_id, 'GET', '/admin/orders' );
+		db_integration_same( 403, $no_key->get_status(), 'kitchen account without the board key is refused' );
+		db_integration_same( 'doughboss_board_key_required', (string) ( $no_key->get_data()['code'] ?? '' ), 'kitchen refusal names the board key' );
+		db_integration_same( 200, $call( $kitchen_id, 'GET', '/admin/orders', array(), array( 'X-DoughBoss-Board-Key' => 'reports-role-secret' ) )->get_status(), 'kitchen account with the board key is allowed' );
+		foreach ( $five as $path ) {
+			db_integration_same( 200, $call( $reports_id, 'GET', $path )->get_status(), 'reports account needs no board key for ' . $path );
+		}
+	} finally {
+		update_option( DoughBoss_Settings::OPTION_KEY, $saved_options, false );
+		wp_set_current_user( $saved_user );
+		foreach ( $users as $user_id ) {
+			wp_delete_user( $user_id );
+		}
+		foreach ( $shops as $shop_id ) {
+			if ( $shop_id ) {
+				$wpdb->delete( $wpdb->prefix . 'doughboss_locations', array( 'id' => (int) $shop_id ), array( '%d' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			}
+		}
+	}
+} )();
+
 remove_filter( 'pre_wp_mail', '__return_true', 999 );
 remove_filter( 'pre_http_request', 'db_integration_square_http', 10 );
 update_option( 'doughboss_settings', $orders_transport_settings, false );
