@@ -146,6 +146,7 @@ if ( $role ) {
 remove_role( 'doughboss_kitchen' );
 remove_role( 'doughboss_manager' );
 remove_role( 'doughboss_staff' );
+remove_role( 'doughboss_reports' );
 
 // Remove any POSPal work left in WP-Cron (for example when uninstall runs
 // without a prior deactivation event).

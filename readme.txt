@@ -4,7 +4,7 @@ Tags: pizza, food ordering, menu, restaurant, ecommerce
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.51.1
+Stable tag: 2.52.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,9 @@ passwords are environment-first, and live mode has an additional approval gate.
 No. Carts are tied to a cookie token, so guests can order without logging in.
 
 == Changelog ==
+
+= 2.52.0 =
+* New least-privilege role "DoughBoss Reports (read-only)" (doughboss_reports) with a new capability, view_doughboss_reports. On a GET request it can read the five integration feeds (status, board summary, pre-order requests, active orders and catering board) for every shop, with an optional shop filter. It is refused on every write route, vouchers, the Square dashboard, order history, the staff clock, the kitchen screen and all wp-admin plugin pages. The role is created on upgrade (database 1.32.0); existing kitchen and manager accounts are unchanged, and a kitchen account is still limited to its assigned shop. The Order Board key is not required for this API-only role.
 
 = 2.51.1 =
 * Remove the unannounced product name from the public catering copy, the catering SEO description, the theme catering page, a public script comment and the readme changelog, with a test that the catering SEO copy never names it. No behaviour changes. Theme 1.8.1.

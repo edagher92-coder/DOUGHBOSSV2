@@ -18,6 +18,19 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Applies pending schema/data migrations in order.
  */
 class DoughBoss_Migrations {
+	/**
+	 * 1.32.0 - read-only reports role. No schema change: add_capabilities()
+	 * creates the doughboss_reports role (idempotent), and this step proves it
+	 * exists so a failed role write is retried instead of silently skipped.
+	 */
+	private static function upgrade_to_1_32_0() {
+		DoughBoss_Activator::add_capabilities();
+		$role = get_role( 'doughboss_reports' );
+		if ( ! $role || ! $role->has_cap( 'view_doughboss_reports' ) ) {
+			throw new RuntimeException( 'The read-only reports role could not be created.' );
+		}
+	}
+
 	/** Additive workflow marker only; existing requests remain version zero. */
 	private static function upgrade_to_1_31_0() {
 		if ( ! DoughBoss_Activator::checkout_storage_ready() || ! DoughBoss_Activator::preorder_approval_storage_ready() ) {
@@ -134,6 +147,7 @@ class DoughBoss_Migrations {
 				'1.29.0' => 'upgrade_to_1_29_0',
 				'1.30.0' => 'upgrade_to_1_30_0',
 				'1.31.0' => 'upgrade_to_1_31_0',
+				'1.32.0' => 'upgrade_to_1_32_0',
 			);
 			foreach ( $steps as $version => $method ) {
 				if ( version_compare( $installed, $version, '<' ) ) {
