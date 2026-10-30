@@ -1,0 +1,14 @@
+{
+ "id": "shop-contact-phone",
+ "order": 2,
+ "after": ["phone-helpers"],
+ "title": "Shop card phone: readable number and +61 tel: link via phoneTel/phoneDisplay",
+ "target": "public/js/doughboss.js",
+ "functions": ["shopContact"],
+ "brief": "ops/qwen/tasks/shop-contact-phone.md",
+ "oracle": "tests/qwen/shop-contact-phone.oracle.js",
+ "context": [
+  { "path": "public/js/doughboss.js", "functions": ["shopContact", "phoneTel", "phoneDisplay"] }
+ ],
+ "attempts": 4
+}
