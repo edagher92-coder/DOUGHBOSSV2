@@ -243,13 +243,17 @@ class DoughBoss_Portals {
 			wp_die( esc_html__( 'You do not have permission to view management.', 'doughboss' ), esc_html__( 'Management access required', 'doughboss' ), array( 'response' => 403 ) );
 		}
 
+		// Read-only selector; only the exact CRM value changes the manager view.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$section = isset( $_GET['section'] ) && is_string( $_GET['section'] ) && 'crm' === $_GET['section'] ? 'crm' : 'overview';
 		require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-admin.php';
 		$this->render_head( __( 'Management — DoughBoss', 'doughboss' ), 'management' );
 		?>
 		<body class="doughboss-standalone-portal doughboss-management-portal">
 			<?php $this->render_portal_bar( 'management', '', '' ); ?>
 			<nav class="db-management-nav" aria-label="<?php esc_attr_e( 'Management sections', 'doughboss' ); ?>">
-				<a class="is-active" href="<?php echo esc_url( home_url( '/management/' ) ); ?>"><?php esc_html_e( 'Overview', 'doughboss' ); ?></a>
+				<a<?php echo 'overview' === $section ? ' class="is-active" aria-current="page"' : ''; ?> href="<?php echo esc_url( home_url( '/management/' ) ); ?>"><?php esc_html_e( 'Overview', 'doughboss' ); ?></a>
+				<a<?php echo 'crm' === $section ? ' class="is-active" aria-current="page"' : ''; ?> href="<?php echo esc_url( home_url( '/management/?section=crm' ) ); ?>"><?php esc_html_e( 'Catering CRM', 'doughboss' ); ?></a>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss' ) ); ?>"><?php esc_html_e( 'Orders', 'doughboss' ); ?></a>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-catering' ) ); ?>"><?php esc_html_e( 'Catering', 'doughboss' ); ?></a>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-reports' ) ); ?>"><?php esc_html_e( 'Reports', 'doughboss' ); ?></a>
@@ -258,7 +262,13 @@ class DoughBoss_Portals {
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-settings' ) ); ?>"><?php esc_html_e( 'Settings', 'doughboss' ); ?></a>
 			</nav>
 			<main class="db-management-main" id="main">
-				<?php ( new DoughBoss_Admin() )->render_dashboard_page(); ?>
+				<?php if ( 'crm' === $section ) {
+					// GET-only filters; the CRM service validates before querying.
+					// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+					DoughBoss_CRM::render( $_GET );
+				} else {
+					( new DoughBoss_Admin() )->render_dashboard_page();
+				} ?>
 			</main>
 			<script src="<?php echo esc_url( $this->versioned_asset( 'public/js/doughboss-portals.js' ) ); ?>"></script>
 		</body>

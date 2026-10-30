@@ -1087,9 +1087,15 @@ class DoughBoss_Catering {
 			$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}" );
 		}
 
+		if ( ! empty( $wpdb->last_error ) ) {
+			return array( 'items' => array(), 'total' => 0, 'error' => true );
+		}
 		$list_params = array_merge( $params, array( $per_page, $offset ) );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$items = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY created_at DESC LIMIT %d OFFSET %d", $list_params ), ARRAY_A );
+		if ( ! empty( $wpdb->last_error ) ) {
+			return array( 'items' => array(), 'total' => 0, 'error' => true );
+		}
 
 		return array(
 			'items' => $items ? $items : array(),
