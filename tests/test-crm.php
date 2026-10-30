@@ -158,6 +158,3 @@ db_test( 'CRM escapes customer content and links to the existing enquiry search'
 		assert_true( false !== strpos( $html, 'method="get"' ) || false !== strpos( $html, "method='get'" ), 'filter form uses GET' );
 	} );
 } );
-
-
-
