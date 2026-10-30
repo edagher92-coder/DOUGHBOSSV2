@@ -29,10 +29,10 @@ git push origin claude/brave-davinci-exkwqh
 |---|---|
 | The NUMBERS RULE: no payment, checkout, cart, price, quote, voucher, catering, refund or order code | `checkTask`, before any model call |
 | Storefront JavaScript only (`public/js/doughboss*.js`, minus stakes files) | `checkTask` |
-| Everything outside the named functions stays byte for byte the same, and each named function must parse as exactly one function (a stray or unbalanced brace is refused, never trusted) | `outsideAllowed`, after every reply; refused even if the tests pass |
+| The edited file must parse. Each named function must be declared exactly once. With those functions cut out at their exact parsed ranges, the rest of the file must be token-for-token the same | `outsideAllowed` uses a real parser (vendored acorn 8.14.0, `vendor/acorn/`), not brace counting, after every reply. The change is refused even if the tests pass |
 | Model code runs in `node --permission` with reads limited to `public/`, `tests/`, `themes/`, `includes/` and `scripts/`, an empty environment and a 60 s limit | `runTest` |
 | Nothing untracked or ignored (a token, a `.env`) may sit in those folders | Pre-flight; the run refuses to start |
-| Network cut for model code where the platform allows: Node's permission model where it gates sockets, else `unshare -rn` on Linux | `networkIsolation`; every attempt logs `networkIsolated`. **On Windows with Node 24 it cannot be cut.** The run says so at the start, and the read limits above are the protection |
+| No network and no host unix sockets for model code, proven by a probe (TCP out, loopback, and a socket the runner opens): Node's permission model where it blocks both, else on Linux `unshare -rnm` with tmpfs over `/run`, `/tmp`, `/dev/shm` and the temp folder | `networkIsolation`; every attempt logs `networkIsolated`. **On Windows with Node 24 neither can be cut.** The run warns at the start, and the read limits above are the protection |
 | Oracles are lead-written and never edited by the model | Model edits are applied to `task.target` only |
 
 ## Tasks
