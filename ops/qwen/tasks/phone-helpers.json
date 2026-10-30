@@ -1,0 +1,15 @@
+{
+ "id": "phone-helpers",
+ "order": 1,
+ "title": "Storefront phone helpers: phoneTel (+61 dial form) and phoneDisplay, matching the server",
+ "target": "public/js/doughboss.js",
+ "functions": [],
+ "newFunctions": ["phoneTel", "phoneDisplay"],
+ "brief": "ops/qwen/tasks/phone-helpers.md",
+ "oracle": "tests/qwen/phone-helpers.oracle.js",
+ "context": [
+  { "path": "includes/class-doughboss-settings.php", "lines": [502, 540] },
+  { "path": "public/js/doughboss.js", "functions": ["shopContact"] }
+ ],
+ "attempts": 4
+}
