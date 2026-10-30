@@ -1,0 +1,29 @@
+# DoughBoss corporate catering and growth: 2026-2032
+Status: research / development specification, not a launched campaign. Companion to the master plan and issue #77. Elie and Charlie approval required before activation.
+
+## Market opportunity and positioning
+DoughBoss is targeting an EXISTING and competitive Sydney/Melbourne corporate catering category. The proposed advantage is Mediterranean-inspired mini pizzas/bites, authentic production, predictable timed deliveries, cost-controlled family meals, and savoury PLUS sweet/entertainment packages using Snowflow slushies, popcorn, fairy floss and soft serve. Never claim to be the first or cheapest without a documented market audit. Do not confuse affiliated cost-price supply with zero economic cost.
+
+## Sell four distinct offers, not a vague menu
+1. DoughBoss Daily: affordable family/group bundles, price certainty, hero products and direct digital orders.
+2. DoughBoss Office: minimum-order lunch platters for 10-150+ people, named meeting-slot delivery, simple dietaries and monthly/fortnightly repeats.
+3. DoughBoss Events: premium minis, Mediterranean bites, event platters, presentation and optional serving staff.
+4. DoughBoss x Snowflow Experience: above plus slushie, soft serve, popcorn, fairy floss and optional equipment/attendants. Quote power/access, rental, service, travel, setup/cleaning, insurance and failure backup separately. A fully staffed station is NOT a zero-cost drink add-on.
+Every offer needs actual recipe/portion/temperature/allergen rules, fulfillment lead time, minimum and cancellation policy, ex-GST and inc-GST price, delivery radius and profit floor. Explicit price approval for discounts.
+
+## Research assignments - track A
+Competitors: mystery shop 10 Sydney CBD/Darlinghurst/Surry Hills caterers and 10 Melbourne CBD alternatives. Record catering minimum, price/head, actual grams/pieces, delivery area, windows, GST, dietaries, corporate invoicing, bundles, contract cadence, customer complaints and ordering UX. Save screenshots with dates and source links. Buyer interviews: 10 office managers/EAs, 5 HR/workplace coordinators, 5 pub/venue managers, 5 event agencies and 5 coworking operators across Sydney and Melbourne. Ask actual spend/head, order frequency, decision criteria, delivery failures, dietaries, repeat-contract objections and appetite for sweets/savouries. Log interview consent and do not invent survey findings. Each of four candidate stores: map 10/20/30-minute REALISTIC catering delivery catchments, building loading, office density, rivals, peak traffic, storage restrictions and evening/weekend demand. Test whether Darlinghurst is truly superior for CBD service against competitors.
+
+## Sales engine - track B
+Build a 200-target prospect list segmented by office managers, coworking, corporate events, agency, pub/hospitality and recurring meeting planners. Fields: organisation, delivery site, source, relevant buyer, permission to contact, stage, estimated headcount, budget band, next task, quote version, tasting, first order, first repeat, net contribution, churn reason. Funnel: discovered -> qualified -> sampled -> quoted -> won -> paid -> fulfilled -> repeat -> dormant. Target first 10 profitable recurring business accounts as a PILOT, not a market forecast.
+Service level test: respond same business day and standard quote within one business day, subject to capacity. Offer recurring monthly/fortnightly arrangements with actual delivery dates, adjustable headcount cutoffs, minimums, amendment and cancellation, annual pricing review, safe invoicing and contract terms. Use Snowflow's existing commercial relationships where lawful and agreed.
+
+## Advertising - track C
+Separate Google high-intent corporate catering / office lunch / event platter campaigns from local household value. Genuine location pages with explicit delivery windows and minimum orders. Control paid spending by qualified enquiry cost, first PROFITABLE order, 60/90-day repeat and contribution LTV; do not optimize merely for views, likes or top-line revenue. Use real photography/videos of the four cooks only with permission; concepts: artisan process, side-by-side corporate table before/after, Snowflow party bundle. Run small audience and creative tests; track UTMs and lawful consent; maintain negative keywords and geo exclusions. Retarget only with valid permissions. Avoid unconsented bulk cold email: Australian Spam Act generally requires consent, identification and unsubscribe (https://www.acma.gov.au/avoid-sending-spam).
+
+## Pricing and economic rule
+For a package: ex-GST sales minus ingredients, butcher/in-house labour allocation, packaging, central kitchen overhead, cooking losses, freight, equipment setup/service/cleaning, merchant fees, refunds, ad acquisition and customer support = contribution. Ensure per-person pricing and corporate volume discounts protect an agreed floor. Never count 400-500k claimed setup avoidance as operating profit. Financial scenarios with and without intervention must hold store count constant; separately calculate acquisitions.
+Illustrative, unverified same-store revenue sensitivity only: downside 12m -10% to +5%, 24m -5% to +10%; test-success 12m +10% to +25%, 24m +20% to +45%; strong 12m +25% to +45%, 24m +45% to +80%. NOT predictions, and operating profit may fall despite growth due to delivery/discount costs. Demand robust cohorts and actual baseline before claiming any profit percentage.
+
+## Definition of done
+CRM account stage and lawful contact data traceable; approved quote floor and package costs; lead->quote->payment->batch->dispatch->refund->Xero reconcilable; pilot has ad stop-loss, on-time KPI, review of repeat and net profitability; unknown payment status never creates a kitchen release. Owner: Elie commercial with Charlie sign-off on product/capacity. No live web/ads/provider configuration changed by this document.
