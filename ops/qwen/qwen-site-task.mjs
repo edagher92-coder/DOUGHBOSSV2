@@ -50,6 +50,8 @@ export function checkTask(task) {
   if (STAKES.test(task.target ?? '')) problems.push('target is a stakes file');
   const fns = [...(task.functions ?? []), ...(task.newFunctions ?? [])];
   if (fns.length === 0) problems.push('name the functions the change may touch');
+  if ((task.newFunctions ?? []).length && !(task.functions ?? []).length && typeof task.siblingOf !== 'string') problems.push('new functions need a siblingOf function to sit beside');
+  if (task.siblingOf !== undefined && (typeof task.siblingOf !== 'string' || !FN.test(task.siblingOf))) problems.push('siblingOf');
   for (const fn of fns) {
     if (typeof fn !== 'string' || !FN.test(fn)) problems.push(`function name ${JSON.stringify(fn)}`);
     else if (STAKES.test(fn)) problems.push(`function ${fn} is stakes code`);
@@ -69,26 +71,28 @@ export function checkTask(task) {
 // Function ranges come from a real parse of the whole file (acorn, vendored at ops/qwen/vendor/acorn), never from
 // counting braces: a hand-written scanner can be fooled by a quote or brace inside a regex or string, and then the
 // guard and the engine disagree about where a function ends. A file that does not parse is refused outright.
-export function parseScript(source) {
-  return acorn.parse(source, { ecmaVersion: 'latest', sourceType: 'script', allowReturnOutsideFunction: false });
+export function parseScript(source, tokens) {
+  return acorn.parse(source, { ecmaVersion: 'latest', sourceType: 'script', allowReturnOutsideFunction: false, ...(tokens ? { onToken: tokens } : {}) });
 }
 
-// Every FunctionDeclaration in the tree, by name: name -> [{ start, end }] (character offsets, end exclusive).
+// Every FunctionDeclaration in the tree, by name: name -> [{ start, end, parent }], where `parent` is the exact path
+// from the Program to the statement list that holds it (e.g. "body.0.expression.callee.body.body"), so a function
+// moved into another function or block is told apart from one left beside its neighbours.
 export function functionDeclarations(ast) {
   const found = new Map();
-  const visit = node => {
+  const visit = (node, path) => {
     if (!node || typeof node.type !== 'string') return;
     if (node.type === 'FunctionDeclaration' && node.id) {
       if (!found.has(node.id.name)) found.set(node.id.name, []);
-      found.get(node.id.name).push({ start: node.start, end: node.end });
+      found.get(node.id.name).push({ start: node.start, end: node.end, parent: path.slice(0, -1).join('.') });
     }
     for (const key of Object.keys(node)) {
       const value = node[key];
-      if (Array.isArray(value)) value.forEach(visit);
-      else if (value && typeof value === 'object' && typeof value.type === 'string') visit(value);
+      if (Array.isArray(value)) value.forEach((child, i) => visit(child, [...path, key, String(i)]));
+      else if (value && typeof value === 'object' && typeof value.type === 'string') visit(value, [...path, key]);
     }
   };
-  visit(ast);
+  visit(ast, []);
   return found;
 }
 
@@ -144,69 +148,114 @@ export function applyEdit(source, { search, replace }) {
   return { source: lines.join('\n') };
 }
 
-// The file with the named functions cut out at their exact character ranges, and every whitespace run that holds a
-// line break folded to one line break (so the only slack is the blank line between a new function and its
-// neighbours; a change that adds or removes a line break between tokens still counts, because of ASI).
-function remainder(source, ranges) {
-  let out = '', at = 0;
-  for (const { start, end } of [...ranges].sort((x, y) => x.start - y.start)) { out += source.slice(at, start); at = end; }
-  return (out + source.slice(at)).replace(/[ \t]*\n\s*/g, '\n');
+// The file's tokens (from the same parse) that lie outside the cut ranges: each token's exact source text, plus
+// whether a line break precedes it (that matters to ASI). Across a cut the line-break flag is not compared, since
+// only a whole declaration sits there. Literals are compared by their exact text, so nothing inside a string or
+// template elsewhere can change; comments carry no meaning and are not compared.
+function tokensOutside(source, tokens, ranges) {
+  const inCut = t => ranges.some(r => t.start >= r.start && t.end <= r.end);
+  const cutBetween = (from, to) => ranges.some(r => r.start >= from && r.end <= to);
+  const out = [];
+  let prev = null;
+  for (const t of tokens) {
+    if (t.type.label === 'eof' || inCut(t)) continue;
+    const gap = prev ? source.slice(prev.end, t.start) : '';
+    out.push({ text: source.slice(t.start, t.end), lineBreak: prev && !cutBetween(prev.end, t.start) ? /[\n\r\u2028\u2029]/.test(gap.replace(/\/\*[\s\S]*?\*\//g, m => (/[\n\r\u2028\u2029]/.test(m) ? '\n' : ' '))) : null });
+    prev = t;
+  }
+  return out;
 }
 
-// Refuses any change outside the task's functions. The new file must parse; each named function must be declared
-// exactly once; and the file with those functions cut out must be identical before and after.
+function sameTokens(a, b) {
+  if (a.length !== b.length) return false;
+  return a.every((t, i) => t.text === b[i].text && (t.lineBreak === null || b[i].lineBreak === null || t.lineBreak === b[i].lineBreak));
+}
+
+// Refuses any change outside the task's functions:
+// - the new file must parse;
+// - each named function must be declared exactly once;
+// - an existing named function must stay in the same statement list it was in, and a new one must sit in the
+//   same statement list as the task's `siblingOf` function (or its first named function);
+// - with those declarations cut out at their exact parsed ranges, the rest of the file must be the same tokens.
 export function outsideAllowed(task, before, after) {
   const fns = task.functions ?? [], fresh = task.newFunctions ?? [];
   const now = after.replace(/\r\n/g, '\n'), was = before.replace(/\r\n/g, '\n');
+  const nowTokens = [], wasTokens = [];
   let nowDecls;
-  try { nowDecls = functionDeclarations(parseScript(now)); }
-  catch (error) { return { missing: [], unparsable: [`the file (${error.message})`], changedElsewhere: false }; }
-  const wasDecls = functionDeclarations(parseScript(was));
+  try { nowDecls = functionDeclarations(parseScript(now, nowTokens)); }
+  catch (error) { return { missing: [], unparsable: [`the file (${error.message})`], misplaced: [], changedElsewhere: false }; }
+  const wasDecls = functionDeclarations(parseScript(was, wasTokens));
   const missing = [...fns, ...fresh].filter(fn => (nowDecls.get(fn) ?? []).length !== 1);
-  if (missing.length) return { missing, unparsable: [], changedElsewhere: false };
+  if (missing.length) return { missing, unparsable: [], misplaced: [], changedElsewhere: false };
+  const anchor = task.siblingOf ?? fns[0];
+  const home = (wasDecls.get(anchor) ?? [])[0]?.parent;
+  const misplaced = [
+    ...fns.filter(fn => nowDecls.get(fn)[0].parent !== (wasDecls.get(fn) ?? [])[0]?.parent),
+    ...fresh.filter(fn => home === undefined || nowDecls.get(fn)[0].parent !== home)
+  ];
+  if (misplaced.length) return { missing, unparsable: [], misplaced, changedElsewhere: false };
   const cut = (decls, names) => names.flatMap(fn => decls.get(fn) ?? []);
-  const changedElsewhere = remainder(was, cut(wasDecls, fns)) !== remainder(now, cut(nowDecls, [...fns, ...fresh]));
-  return { missing, unparsable: [], changedElsewhere };
+  const changedElsewhere = !sameTokens(tokensOutside(was, wasTokens, cut(wasDecls, fns)), tokensOutside(now, nowTokens, cut(nowDecls, [...fns, ...fresh])));
+  return { missing, unparsable: [], misplaced, changedElsewhere };
 }
 
 // --- running the oracle ------------------------------------------------------------------------------------------
 
-// How model code is kept off the network, decided once per run and only from a probe that tries BOTH a TCP
-// connection and a unix socket the runner itself opens:
-// - 'node': this Node's permission model already refuses both.
-// - 'namespaces' (Linux): `unshare -rnm` gives the child its own empty network namespace and mount namespace, and
-//   tmpfs is mounted over /run, /tmp, /dev/shm and the temp folder, so host unix sockets (a Docker or desktop bus
-//   socket, say) are not reachable either. `unshare -rn` alone was not enough: unix sockets live in the filesystem.
-// - false: neither works (Windows, or Node < 25 on macOS). Printed at the start and logged on every attempt, so a
-//   run without isolation is never mistaken for one with it.
+// How model code is kept off the network and away from host sockets, decided once per run from a probe:
+// - 'node': this Node's permission model already refuses TCP and unix sockets.
+// - 'namespaces' (Linux): the child gets its own empty network namespace (`unshare -rnmpf`), and a fresh, empty
+//   root filesystem holding only the system libraries (/usr, /lib, /lib64, /bin, /sbin), this Node install and the
+//   READ_DIRS, read-only, plus a private /proc and /dev/null. $HOME, /run, /tmp and every other host path,
+//   with any socket in them, do not exist in there. `unshare -rn` alone was not enough (unix sockets live in the
+//   filesystem), and hiding a few socket folders proved nothing about the others.
+// - false: neither works (Windows, Node < 25 on macOS, a Linux without unprivileged namespaces, or the repo under
+//   /tmp). Printed at the start and logged on every attempt, so an unisolated run is never mistaken for an
+//   isolated one.
 const READ_FLAGS = () => READ_DIRS.map(d => `--allow-fs-read=${join(ROOT, d)}`);
-const HIDE = ['/run', '/tmp', '/dev/shm'];
+const SYSTEM = ['/usr', '/lib', '/lib64', '/bin', '/sbin'];
+
+// The minimal root is built inside the child's own mount namespace, on a tmpfs mounted over /tmp (so nothing is
+// left on the host), then entered with chroot. Any mount failing aborts the child (`set -e`): fail closed.
+const ROOT_SCRIPT = [
+  'set -e',
+  'mount -t tmpfs -o mode=0755 tmpfs /tmp',
+  'R=/tmp/root; mkdir -p "$R/proc" "$R/dev" "$R/tmp"',
+  'while [ "$1" != "--" ]; do',
+  '  if [ -L "$1" ]; then mkdir -p "$R$(dirname "$1")"; ln -s "$(readlink "$1")" "$R$1";',
+  '  elif [ -e "$1" ]; then mkdir -p "$R$1"; mount --rbind "$1" "$R$1"; mount -o remount,bind,ro "$R$1" 2>/dev/null || true; fi',
+  '  shift; done; shift',
+  'touch "$R/dev/null"; mount --bind /dev/null "$R/dev/null"',
+  'mount -t proc proc "$R/proc"',
+  'cd "$R"; exec chroot "$R" /bin/sh -c \'cd "$0" && exec "$@"\' "$@"'
+].join('\n');
 
 export function sandboxed(nodeArgs, mode) {
   if (mode !== 'namespaces') return [process.execPath, nodeArgs];
-  const inside = (path, dir) => `${path}${sep}`.startsWith(`${dir}${sep}`);
-  const dirs = [...new Set([...HIDE, tmpdir()].map(d => resolve(d)))].filter(d => !inside(ROOT, d) && !inside(process.execPath, d));
-  const script = 'set -e; while [ "$1" != "--" ]; do if [ -d "$1" ] && [ ! -L "$1" ]; then mount -t tmpfs tmpfs "$1"; fi; shift; done; shift; exec "$@"';
-  return ['unshare', ['-rnm', 'sh', '-c', script, 'sh', ...dirs, '--', process.execPath, ...nodeArgs]];
+  const nodeHome = dirname(dirname(process.execPath));
+  const binds = [...SYSTEM, nodeHome, ...READ_DIRS.map(d => join(ROOT, d))];
+  return ['unshare', ['-rnmpf', 'sh', '-c', ROOT_SCRIPT, 'sh', ...binds, '--', ROOT, process.execPath, ...nodeArgs]];
 }
 
 const BLOCKED = /^(ENETUNREACH|EHOSTUNREACH|ERR_ACCESS_DENIED|EACCES|EPERM|ENOENT)$/;
 export async function networkIsolation() {
+  const inside = (path, dir) => `${path}${sep}`.startsWith(`${dir}${sep}`);
   const dir = mkdtempSync(join(tmpdir(), 'qwen-probe-'));
   const sock = join(dir, 'probe.sock');
   const server = createServer(c => c.destroy());
   try {
     await new Promise((ok, fail) => server.once('error', fail).listen(sock, ok));
-    const probe = `const n=require('net');const t=o=>new Promise(r=>{const c=n.connect(o);c.setTimeout(3000,()=>{c.destroy();r('TIMEOUT')});c.on('connect',()=>{c.destroy();r('OPEN')});c.on('error',e=>r(e.code||'ERR'))});Promise.all([t({host:'1.1.1.1',port:443}),t({host:'127.0.0.1',port:9}),t({path:${JSON.stringify(sock)}})]).then(v=>{console.log('PROBE '+v.join(' '));process.exit(0)})`;
+    const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
+    const looks = JSON.stringify([home, '/run', '/tmp/' + dir.split(sep).pop()].filter(Boolean));
+    const probe = `const n=require('net'),fs=require('fs');const t=o=>new Promise(r=>{const c=n.connect(o);c.setTimeout(3000,()=>{c.destroy();r('TIMEOUT')});c.on('connect',()=>{c.destroy();r('OPEN')});c.on('error',e=>r(e.code||'ERR'))});const seen=${looks}.map(p=>{try{fs.statSync(p);return 'VISIBLE'}catch(e){return e.code||'ERR'}});Promise.all([t({host:'1.1.1.1',port:443}),t({host:'127.0.0.1',port:9}),t({path:${JSON.stringify(sock)}})]).then(v=>{console.log('PROBE '+v.concat(seen).join(' '));process.exit(0)})`;
     const attempt = mode => new Promise(ok => {
-      const [cmd, argv] = sandboxed(['--permission', '-e', probe], mode);
+      const [cmd, argv] = sandboxed(['--permission', ...READ_FLAGS(), '-e', probe], mode);
       const child = spawn(cmd, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
       let out = '';
       child.stdout.on('data', d => { out += d; }); child.stderr.on('data', d => { out += d; });
       child.on('error', () => ok(null)); child.on('close', () => ok((/PROBE (.+)/.exec(out) ?? [])[1] ?? null));
     });
-    const modes = process.platform === 'linux' ? ['node', 'namespaces'] : ['node'];
-    for (const mode of modes) {
+    const linuxOk = process.platform === 'linux' && !inside(ROOT, '/tmp') && !inside(process.execPath, '/tmp');
+    for (const mode of linuxOk ? ['node', 'namespaces'] : ['node']) {
       const result = await attempt(mode);
       if (result && result.split(' ').every(code => BLOCKED.test(code))) return mode;
     }
@@ -255,14 +304,18 @@ async function readChatStream(stream) {
   return { content, usage };
 }
 
+// A connection the server dropped while idle (its keep-alive timeout passes during a long test run) fails before any
+// answer arrives; that is retried once on a fresh connection instead of costing a whole attempt. An HTTP error or a
+// failure mid-answer is not retried here.
 async function chat({ endpoint, model, prompt, apiKey }) {
   const started = performance.now();
-  const response = await fetch(`${endpoint.replace(/\/+$/, '')}/chat/completions`, {
+  const send = () => fetch(`${endpoint.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
+    headers: { 'Content-Type': 'application/json', Connection: 'close', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
     body: JSON.stringify({ model, stream: true, stream_options: { include_usage: true }, temperature: 0, messages: [{ role: 'user', content: prompt }] }),
     signal: AbortSignal.timeout(900_000)
   });
+  const response = await send().catch(error => (error?.name === 'TimeoutError' ? Promise.reject(error) : send()));
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const { content, usage } = await readChatStream(response.body);
   return { text: content, seconds: (performance.now() - started) / 1000, outputTokens: usage?.completion_tokens ?? null };
@@ -318,10 +371,11 @@ async function runTask(task, opts, stamp) {
     }
     if (!problem && source === original) problem = 'The edits changed nothing.';
     if (!problem) {
-      const { missing, unparsable, changedElsewhere } = outsideAllowed(task, original, source);
+      const { missing, unparsable, misplaced, changedElsewhere } = outsideAllowed(task, original, source);
       const allowed = [...(task.functions ?? []), ...(task.newFunctions ?? [])].join(', ');
       if (missing.length) problem = `These functions are missing or defined more than once: ${missing.join(', ')}.`;
       else if (unparsable.length) problem = `The edited file does not parse: ${unparsable.join(', ')}. Check every brace, string and comment.`;
+      else if (misplaced.length) problem = `These functions are not where they belong: ${misplaced.join(', ')}. Declare them beside ${task.siblingOf ?? (task.functions ?? [])[0]} in the same scope, not inside another function or block.`;
       else if (changedElsewhere) problem = `Code outside the functions you may touch (${allowed}) was changed. Change only those functions.`;
     }
     if (problem) { appendLog({ ...log, edits: edits.length, refused: problem }); feedback = problem; continue; }
