@@ -28,9 +28,11 @@ git push origin claude/brave-davinci-exkwqh
 | Rule | Enforced by |
 |---|---|
 | The NUMBERS RULE: no payment, checkout, cart, price, quote, voucher, catering, refund or order code | `checkTask`, before any model call |
-| Only `public/js/doughboss.js`, `public/css/doughboss*.css` and `themes/doughboss-final/` | `checkTask` |
-| Every changed line must sit inside the function(s) the task names | `outsideAllowed`, after every reply; the change is refused even if tests pass |
-| Model code runs in `node --permission` (read-only repo, empty environment, 60 s) | `runTest` |
+| Storefront JavaScript only (`public/js/doughboss*.js`, minus stakes files) | `checkTask` |
+| Everything outside the named functions stays byte for byte the same, and each named function must parse as exactly one function (a stray or unbalanced brace is refused, never trusted) | `outsideAllowed`, after every reply; refused even if the tests pass |
+| Model code runs in `node --permission` with reads limited to `public/`, `tests/`, `themes/`, `includes/` and `scripts/`, an empty environment and a 60 s limit | `runTest` |
+| Nothing untracked or ignored (a token, a `.env`) may sit in those folders | Pre-flight; the run refuses to start |
+| Network cut for model code where the platform allows: Node's permission model where it gates sockets, else `unshare -rn` on Linux | `networkIsolation`; every attempt logs `networkIsolated`. **On Windows with Node 24 it cannot be cut.** The run says so at the start, and the read limits above are the protection |
 | Oracles are lead-written and never edited by the model | Model edits are applied to `task.target` only |
 
 ## Tasks

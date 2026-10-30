@@ -14,24 +14,30 @@
 // Guard rails, enforced before and after every model call:
 // - The NUMBERS RULE: no task may target a payment, checkout, cart, price, quote, voucher, catering, refund or order
 //   function, file or test. A local model never writes code that decides a customer-facing number or a payment path.
-// - Every changed line must sit inside one of the task's named functions (or a new function the task names). An
-//   edit anywhere else in the file is refused and the file restored, even when the tests pass.
-// - The oracle and the regression suites run in a child `node --permission` process that may only READ the repo,
-//   with an empty environment (no keys) and a 60 s limit. Oracles are written by the lead, never by the model.
+// - Everything outside the task's named functions (and the new functions it names) must stay byte for byte the same,
+//   and each of those functions must parse on its own as exactly one function. Anything else is refused and the
+//   file restored, even when the tests pass.
+// - The oracle and the regression suites run in a child `node --permission` process that may READ only the tracked
+//   source folders (READ_DIRS; the run refuses to start if untracked or ignored files sit in them), with an empty
+//   environment (no keys) and a 60 s limit. Network is cut where the platform allows (Node's permission model on
+//   versions that gate the network, else `unshare -rn` on Linux); each attempt logs whether it was. Oracles are
+//   written by the lead, never by the model.
 // - Logs record timings, token counts, pass/fail and test names. Never the API key.
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import vm from 'node:vm';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const TASKS = join(ROOT, 'ops/qwen/tasks');
 const LOGS = join(ROOT, 'ops/qwen/log');
 const REGRESSION = () => readdirSync(join(ROOT, 'tests')).filter(f => f.endsWith('.test.js')).sort().map(f => `tests/${f}`);
+export const READ_DIRS = ['public', 'tests', 'themes', 'includes', 'scripts']; // everything the storefront suites read
 
-export const TARGETS = /^(public\/js\/doughboss\.js|public\/css\/doughboss[a-z0-9-]*\.css|themes\/doughboss-final\/[a-z0-9\/-]+\.(php|css))$/;
+// Storefront JavaScript only: the edit-scope guard below understands JavaScript functions, nothing else.
+export const TARGETS = /^public\/js\/doughboss[a-z0-9-]*\.js$/;
 export const STAKES = /pay|checkout|cart|price|money|total|tax|quote|voucher|catering|refund|order|square|stripe|tyro|pospal|invoice/i;
 const ID = /^[a-z0-9-]{2,40}$/;
 const FN = /^[A-Za-z_$][A-Za-z0-9_$]{0,60}$/;
@@ -59,19 +65,30 @@ export function checkTask(task) {
 
 // --- source helpers ---------------------------------------------------------------------------------------------
 
-// Line spans [first, last] (1-based) of `function name(` … its closing brace, or null.
+// Line span [first, last] (1-based) of `function name(` … its closing brace, or null. Braces inside strings,
+// template literals and comments are skipped. Regex literals are not, so every span is then checked: its text must
+// compile on its own as exactly one function expression. A span that ends early (a stray brace) or swallows the
+// code after it (an unbalanced one) does not, and is reported as unparsable instead of being trusted.
 export function functionSpan(source, name) {
   const start = source.indexOf(`function ${name}(`);
-  if (start === -1) return null;
-  let depth = 0, started = false;
-  for (let i = start; i < source.length; i += 1) {
-    if (source[i] === '{') { started = true; depth += 1; }
-    else if (source[i] === '}' && started && --depth === 0) {
-      const lineOf = at => source.slice(0, at).split('\n').length;
-      return [lineOf(start), lineOf(i)];
-    }
+  if (start === -1 || source.indexOf(`function ${name}(`, start + 1) !== -1) return null; // missing, or defined twice
+  let depth = 0, started = false, end = -1;
+  for (let i = start; i < source.length && end === -1; i += 1) {
+    const c = source[i];
+    if (c === '"' || c === "'" || c === '`') {
+      for (i += 1; i < source.length && source[i] !== c; i += 1) if (source[i] === '\\') i += 1;
+    } else if (c === '/' && source[i + 1] === '/') {
+      while (i < source.length && source[i] !== '\n') i += 1;
+    } else if (c === '/' && source[i + 1] === '*') {
+      i = source.indexOf('*/', i + 2); if (i === -1) return null; i += 1;
+    } else if (c === '{') { started = true; depth += 1; }
+    else if (c === '}' && started && --depth === 0) end = i;
   }
-  return null;
+  if (end === -1) return null;
+  const text = source.slice(start, end + 1);
+  try { new vm.Script(`(${text}\n)`); } catch { return { unparsable: true }; }
+  const lineOf = at => source.slice(0, at).split('\n').length;
+  return [lineOf(start), lineOf(end)];
 }
 
 function excerpt(path, functions, lines) {
@@ -79,7 +96,7 @@ function excerpt(path, functions, lines) {
   const parts = [];
   for (const name of functions ?? []) {
     const span = functionSpan(source, name);
-    if (span) parts.push(source.split('\n').slice(span[0] - 1, span[1]).join('\n'));
+    if (Array.isArray(span)) parts.push(source.split('\n').slice(span[0] - 1, span[1]).join('\n'));
   }
   if (Array.isArray(lines)) parts.push(source.split('\n').slice(lines[0] - 1, lines[1]).join('\n'));
   return parts.join('\n\n');
@@ -125,38 +142,52 @@ export function applyEdit(source, { search, replace }) {
   return { source: lines.join('\n') };
 }
 
-// New-file line numbers touched by the change, from git's own diff (works the same on Windows and Linux).
-export function changedLines(before, after) {
-  const dir = mkdtempSync(join(tmpdir(), 'qwen-site-'));
-  try {
-    writeFileSync(join(dir, 'a'), before); writeFileSync(join(dir, 'b'), after);
-    const diff = spawnSync('git', ['diff', '--no-index', '--no-color', '-U0', 'a', 'b'], { cwd: dir, encoding: 'utf8' });
-    if (diff.status !== 0 && diff.status !== 1) throw new Error(`git diff failed: ${diff.stderr}`);
-    const touched = [];
-    for (const m of diff.stdout.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
-      const start = Number(m[1]), count = m[2] === undefined ? 1 : Number(m[2]);
-      if (count === 0) touched.push(start, start + 1); // a pure deletion sits between these lines
-      for (let k = 0; k < count; k += 1) touched.push(start + k);
-    }
-    return touched;
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+// The file with the named functions cut out and each run of blank lines folded to one, so the only slack is the
+// blank line that separates a new function from its neighbours. Line endings are normalised first.
+function remainder(source, names) {
+  const lines = source.replace(/\r\n/g, '\n').split('\n');
+  const drop = new Set();
+  for (const name of names) {
+    const span = functionSpan(lines.join('\n'), name);
+    if (Array.isArray(span)) for (let l = span[0]; l <= span[1]; l += 1) drop.add(l - 1);
+  }
+  return lines.filter((_, i) => !drop.has(i)).join('\n').replace(/\n[ \t]*(?:\n[ \t]*)+\n/g, '\n\n');
 }
 
+// Refuses any change outside the task's functions: the remainders before and after must be identical.
 export function outsideAllowed(task, before, after) {
-  const source = after.replace(/\r\n/g, '\n');
-  const spans = [...(task.functions ?? []), ...(task.newFunctions ?? [])].map(fn => functionSpan(source, fn)).filter(Boolean);
-  const missing = (task.newFunctions ?? []).filter(fn => !functionSpan(source, fn));
-  const stray = changedLines(before.replace(/\r\n/g, '\n'), source)
-    .filter(line => !spans.some(([a, b]) => line >= a - 1 && line <= b + 1)); // a blank line beside a function is fine
-  return { stray, missing };
+  const fns = task.functions ?? [], fresh = task.newFunctions ?? [];
+  const now = after.replace(/\r\n/g, '\n'), was = before.replace(/\r\n/g, '\n');
+  const missing = [...fns, ...fresh].filter(fn => functionSpan(now, fn) === null);
+  const unparsable = [...fns, ...fresh].filter(fn => functionSpan(now, fn)?.unparsable);
+  const changedElsewhere = !missing.length && !unparsable.length && remainder(was, fns) !== remainder(now, [...fns, ...fresh]);
+  return { missing, unparsable, changedElsewhere };
 }
 
 // --- running the oracle ------------------------------------------------------------------------------------------
 
+// How model code is kept off the network, decided once per run: 'node' when this Node's permission model already
+// refuses sockets, 'unshare' when a Linux user+network namespace is available, otherwise false (logged on every
+// attempt and printed at the start, so a run without isolation is never mistaken for one with it).
+const READ_FLAGS = () => READ_DIRS.map(d => `--allow-fs-read=${join(ROOT, d)}`);
+export function networkIsolation(run = spawnSync) {
+  const probe = "require('net').connect(9,'127.0.0.1').on('error',e=>{console.log(e.code);process.exit(0)}).on('connect',()=>{console.log('OPEN');process.exit(0)})";
+  const viaNode = run(process.execPath, ['--permission', '-e', probe], { encoding: 'utf8', timeout: 10_000 });
+  if (/ERR_ACCESS_DENIED/.test(`${viaNode.stdout}${viaNode.stderr}`)) return 'node';
+  if (process.platform === 'linux') {
+    const viaNs = run('unshare', ['-rn', process.execPath, '-e', probe], { encoding: 'utf8', timeout: 10_000 });
+    if (viaNs.status === 0 && /ENETUNREACH|ECONNREFUSED|EADDRNOTAVAIL/.test(viaNs.stdout ?? '')) return 'unshare';
+  }
+  return false;
+}
+let ISOLATION = null;
+
 function runTest(file) {
   const env = { PATH: process.env.PATH ?? '' };
   if (process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
-  const r = spawnSync(process.execPath, ['--permission', `--allow-fs-read=${ROOT}`, file], { cwd: ROOT, env, encoding: 'utf8', timeout: 60_000 });
+  const args = ['--permission', ...READ_FLAGS(), file];
+  const [cmd, argv] = ISOLATION === 'unshare' ? ['unshare', ['-rn', process.execPath, ...args]] : [process.execPath, args];
+  const r = spawnSync(cmd, argv, { cwd: ROOT, env, encoding: 'utf8', timeout: 60_000 });
   const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
   const num = key => Number((new RegExp(`^# ${key} (\\d+)`, 'm').exec(out) ?? [])[1] ?? 0);
   const failed = [...out.matchAll(/^not ok \d+ - (.+)$/gm)].map(m => m[1].trim());
@@ -240,7 +271,7 @@ async function runTask(task, opts, stamp) {
   const tests = [task.oracle, ...REGRESSION()];
   let feedback = '';
   for (let attempt = 1; attempt <= (task.attempts ?? opts.attempts); attempt += 1) {
-    const log = { ts: new Date().toISOString(), stamp, task: task.id, attempt, model: opts.model };
+    const log = { ts: new Date().toISOString(), stamp, task: task.id, attempt, model: opts.model, networkIsolated: ISOLATION || false };
     let reply;
     try { reply = await chat({ endpoint: opts.endpoint, model: opts.model, prompt: prompt(task, feedback), apiKey: opts.apiKey }); }
     catch (error) { appendLog({ ...log, transport: String(error.message ?? error) }); feedback = ''; continue; }
@@ -255,9 +286,11 @@ async function runTask(task, opts, stamp) {
     }
     if (!problem && source === original) problem = 'The edits changed nothing.';
     if (!problem) {
-      const { stray, missing } = outsideAllowed(task, original, source);
-      if (missing.length) problem = `These new functions are missing: ${missing.join(', ')}.`;
-      else if (stray.length) problem = `Lines ${stray.slice(0, 8).join(', ')} were changed outside the functions you may touch (${[...(task.functions ?? []), ...(task.newFunctions ?? [])].join(', ')}).`;
+      const { missing, unparsable, changedElsewhere } = outsideAllowed(task, original, source);
+      const allowed = [...(task.functions ?? []), ...(task.newFunctions ?? [])].join(', ');
+      if (missing.length) problem = `These functions are missing or defined more than once: ${missing.join(', ')}.`;
+      else if (unparsable.length) problem = `These functions do not parse as one complete function each: ${unparsable.join(', ')}. Check every brace, string and comment.`;
+      else if (changedElsewhere) problem = `Code outside the functions you may touch (${allowed}) was changed. Change only those functions.`;
     }
     if (problem) { appendLog({ ...log, edits: edits.length, refused: problem }); feedback = problem; continue; }
     writeFileSync(file, source);
@@ -295,6 +328,12 @@ async function main() {
   for (const t of tasks) { const p = checkTask(t); if (p.length) throw new Error(`task ${t.id}: ${p.join('; ')}`); }
   const dirty = spawnSync('git', ['status', '--porcelain', '--', ...new Set(tasks.map(t => t.target))], { cwd: ROOT, encoding: 'utf8' }).stdout.trim();
   if (dirty) throw new Error(`commit or stash local changes to the target files first:\n${dirty}`);
+  // Model code can read READ_DIRS, so nothing that is not in the public repository may sit there (a token, a .env).
+  const extra = spawnSync('git', ['status', '--porcelain', '--ignored', '--untracked-files=all', '--', ...READ_DIRS], { cwd: ROOT, encoding: 'utf8' })
+    .stdout.split('\n').filter(l => /^(\?\?|!!) /.test(l));
+  if (extra.length) throw new Error(`untracked or ignored files sit where model code can read them; move them out first:\n${extra.slice(0, 20).join('\n')}`);
+  ISOLATION = networkIsolation();
+  console.log(ISOLATION ? `Model code runs without network (${ISOLATION}).` : 'WARNING: this platform cannot cut the network for model code (Node < 25 on Windows/macOS). Reads are limited to the tracked source folders; every attempt logs networkIsolated:false.');
   const apiKey = process.env[values['key-env']] ?? '';
   const opts = { endpoint: values.endpoint, model: values.model, apiKey, attempts: Number(values.attempts) };
   const models = await fetch(`${opts.endpoint.replace(/\/+$/, '')}/models`, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(15_000) })
