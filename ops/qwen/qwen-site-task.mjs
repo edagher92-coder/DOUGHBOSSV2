@@ -166,6 +166,21 @@ function tokensOutside(source, tokens, ranges) {
   return out;
 }
 
+// The whole syntax tree with the cut declarations removed from their statement lists and every position dropped.
+// Two files with equal fingerprints mean the same thing outside the cuts, which tokens alone do not show: putting
+// a declaration between `x = y` and a next line `(z)` turns the call y(z) into two statements (ASI) while every
+// token stays the same.
+function fingerprint(ast, cuts) {
+  const drop = new Set(cuts.map(r => `${r.start}:${r.end}`));
+  return JSON.stringify(ast, (key, value) => {
+    if (key === 'start' || key === 'end') return undefined;
+    if (typeof value === 'bigint') return `${value}n`;
+    if (value instanceof RegExp) return String(value);
+    if (Array.isArray(value)) return value.filter(n => !(n && n.type === 'FunctionDeclaration' && drop.has(`${n.start}:${n.end}`)));
+    return value;
+  });
+}
+
 function sameTokens(a, b) {
   if (a.length !== b.length) return false;
   return a.every((t, i) => t.text === b[i].text && (t.lineBreak === null || b[i].lineBreak === null || t.lineBreak === b[i].lineBreak));
@@ -176,15 +191,17 @@ function sameTokens(a, b) {
 // - each named function must be declared exactly once;
 // - an existing named function must stay in the same statement list it was in, and a new one must sit in the
 //   same statement list as the task's `siblingOf` function (or its first named function);
-// - with those declarations cut out at their exact parsed ranges, the rest of the file must be the same tokens.
+// - with those declarations cut out at their exact parsed ranges, the rest of the file must be the same tokens AND
+//   the same syntax tree (so no statement is regrouped around an inserted declaration).
 export function outsideAllowed(task, before, after) {
   const fns = task.functions ?? [], fresh = task.newFunctions ?? [];
   const now = after.replace(/\r\n/g, '\n'), was = before.replace(/\r\n/g, '\n');
   const nowTokens = [], wasTokens = [];
-  let nowDecls;
-  try { nowDecls = functionDeclarations(parseScript(now, nowTokens)); }
+  let nowDecls, nowAst;
+  try { nowAst = parseScript(now, nowTokens); nowDecls = functionDeclarations(nowAst); }
   catch (error) { return { missing: [], unparsable: [`the file (${error.message})`], misplaced: [], changedElsewhere: false }; }
-  const wasDecls = functionDeclarations(parseScript(was, wasTokens));
+  const wasAst = parseScript(was, wasTokens);
+  const wasDecls = functionDeclarations(wasAst);
   const missing = [...fns, ...fresh].filter(fn => (nowDecls.get(fn) ?? []).length !== 1);
   if (missing.length) return { missing, unparsable: [], misplaced: [], changedElsewhere: false };
   const anchor = task.siblingOf ?? fns[0];
@@ -195,7 +212,9 @@ export function outsideAllowed(task, before, after) {
   ];
   if (misplaced.length) return { missing, unparsable: [], misplaced, changedElsewhere: false };
   const cut = (decls, names) => names.flatMap(fn => decls.get(fn) ?? []);
-  const changedElsewhere = !sameTokens(tokensOutside(was, wasTokens, cut(wasDecls, fns)), tokensOutside(now, nowTokens, cut(nowDecls, [...fns, ...fresh])));
+  const wasCut = cut(wasDecls, fns), nowCut = cut(nowDecls, [...fns, ...fresh]);
+  const changedElsewhere = !sameTokens(tokensOutside(was, wasTokens, wasCut), tokensOutside(now, nowTokens, nowCut))
+    || fingerprint(wasAst, wasCut) !== fingerprint(nowAst, nowCut);
   return { missing, unparsable: [], misplaced, changedElsewhere };
 }
 
@@ -222,7 +241,8 @@ const ROOT_SCRIPT = [
   'R=/tmp/root; mkdir -p "$R/proc" "$R/dev" "$R/tmp"',
   'while [ "$1" != "--" ]; do',
   '  if [ -L "$1" ]; then mkdir -p "$R$(dirname "$1")"; ln -s "$(readlink "$1")" "$R$1";',
-  '  elif [ -e "$1" ]; then mkdir -p "$R$1"; mount --rbind "$1" "$R$1"; mount -o remount,bind,ro "$R$1" 2>/dev/null || true; fi',
+  '  elif [ -f "$1" ]; then mkdir -p "$R$(dirname "$1")"; touch "$R$1"; mount --bind "$1" "$R$1"; mount -o remount,bind,ro "$R$1" 2>/dev/null || true;',
+  '  elif [ -d "$1" ]; then mkdir -p "$R$1"; mount --rbind "$1" "$R$1"; mount -o remount,bind,ro "$R$1" 2>/dev/null || true; fi',
   '  shift; done; shift',
   'touch "$R/dev/null"; mount --bind /dev/null "$R/dev/null"',
   'mount -t proc proc "$R/proc"',
@@ -231,8 +251,8 @@ const ROOT_SCRIPT = [
 
 export function sandboxed(nodeArgs, mode) {
   if (mode !== 'namespaces') return [process.execPath, nodeArgs];
-  const nodeHome = dirname(dirname(process.execPath));
-  const binds = [...SYSTEM, nodeHome, ...READ_DIRS.map(d => join(ROOT, d))];
+  // Only the Node binary itself, never its install folder: Node under $HOME must not bring $HOME with it.
+  const binds = [...SYSTEM, process.execPath, ...READ_DIRS.map(d => join(ROOT, d))];
   return ['unshare', ['-rnmpf', 'sh', '-c', ROOT_SCRIPT, 'sh', ...binds, '--', ROOT, process.execPath, ...nodeArgs]];
 }
 
@@ -242,24 +262,31 @@ export async function networkIsolation() {
   const dir = mkdtempSync(join(tmpdir(), 'qwen-probe-'));
   const sock = join(dir, 'probe.sock');
   const server = createServer(c => c.destroy());
+  const run = argvFor => new Promise(ok => {
+    const [cmd, argv] = argvFor;
+    const child = spawn(cmd, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', d => { out += d; }); child.stderr.on('data', d => { out += d; });
+    child.on('error', () => ok(null)); child.on('close', () => ok((/PROBE (.*)/.exec(out) ?? [])[1] ?? null));
+  });
   try {
     await new Promise((ok, fail) => server.once('error', fail).listen(sock, ok));
-    const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-    const looks = JSON.stringify([home, '/run', '/tmp/' + dir.split(sep).pop()].filter(Boolean));
-    const probe = `const n=require('net'),fs=require('fs');const t=o=>new Promise(r=>{const c=n.connect(o);c.setTimeout(3000,()=>{c.destroy();r('TIMEOUT')});c.on('connect',()=>{c.destroy();r('OPEN')});c.on('error',e=>r(e.code||'ERR'))});const seen=${looks}.map(p=>{try{fs.statSync(p);return 'VISIBLE'}catch(e){return e.code||'ERR'}});Promise.all([t({host:'1.1.1.1',port:443}),t({host:'127.0.0.1',port:9}),t({path:${JSON.stringify(sock)}})]).then(v=>{console.log('PROBE '+v.concat(seen).join(' '));process.exit(0)})`;
-    const attempt = mode => new Promise(ok => {
-      const [cmd, argv] = sandboxed(['--permission', ...READ_FLAGS(), '-e', probe], mode);
-      const child = spawn(cmd, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
-      let out = '';
-      child.stdout.on('data', d => { out += d; }); child.stderr.on('data', d => { out += d; });
-      child.on('error', () => ok(null)); child.on('close', () => ok((/PROBE (.+)/.exec(out) ?? [])[1] ?? null));
-    });
-    const linuxOk = process.platform === 'linux' && !inside(ROOT, '/tmp') && !inside(process.execPath, '/tmp');
-    for (const mode of linuxOk ? ['node', 'namespaces'] : ['node']) {
-      const result = await attempt(mode);
-      if (result && result.split(' ').every(code => BLOCKED.test(code))) return mode;
-    }
-    return false;
+    const connect = `const n=require('net');const t=o=>new Promise(r=>{const c=n.connect(o);c.setTimeout(3000,()=>{c.destroy();r('TIMEOUT')});c.on('connect',()=>{c.destroy();r('OPEN')});c.on('error',e=>r(e.code||'ERR'))});Promise.all([t({host:'1.1.1.1',port:443}),t({host:'127.0.0.1',port:9}),t({path:${JSON.stringify(sock)}})]).then(v=>{console.log('PROBE '+v.join(' '));process.exit(0)})`;
+    // 'node': the permission model itself must refuse every connection, unix socket included (ERR_ACCESS_DENIED).
+    const viaNode = await run(sandboxed(['--permission', ...READ_FLAGS(), '-e', connect], 'node'));
+    if (viaNode && viaNode.split(' ').every(code => code === 'ERR_ACCESS_DENIED')) return 'node';
+    if (process.platform !== 'linux' || inside(ROOT, '/tmp')) return false;
+    // 'namespaces': no route out, and the host paths must be truly absent. They are checked WITHOUT --permission,
+    // so a permission refusal cannot pass for absence: only ENOENT counts.
+    const viaNs = await run(sandboxed(['--permission', ...READ_FLAGS(), '-e', connect], 'namespaces'));
+    if (!viaNs || !viaNs.split(' ').every(code => /^(ENETUNREACH|EHOSTUNREACH|ENOENT)$/.test(code))) return false;
+    const home = process.env.HOME ?? '';
+    const looks = [home, '/run', '/var', '/etc', '/root', dir].filter(p => p && p !== '/');
+    // A positive control first (a read folder must be VISIBLE), so a probe that cannot stat anything never passes.
+    const paths = [join(ROOT, READ_DIRS[0]), ...looks];
+    const visible = `const fs=require('fs');console.log('PROBE '+${JSON.stringify(paths)}.map(p=>{try{fs.statSync(p);return 'VISIBLE'}catch(e){return e.code||'ERR'}}).join(' '))`;
+    const seen = (await run(sandboxed(['-e', visible], 'namespaces')))?.split(' ') ?? [];
+    return seen.length === paths.length && seen[0] === 'VISIBLE' && seen.slice(1).every(code => code === 'ENOENT') ? 'namespaces' : false;
   } catch { return false; } finally { server.close(); rmSync(dir, { recursive: true, force: true }); }
 }
 let ISOLATION = null;
