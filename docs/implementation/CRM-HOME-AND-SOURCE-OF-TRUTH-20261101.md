@@ -36,7 +36,7 @@ Cards 1-2 need no new data; 3-8 need new reads or new scoping and come later.
 | Catering enquiries | {prefix}doughboss_catering_enquiries (class-doughboss-catering.php:56) | Staff/manager via create() (line 463) and status changes | DoughBoss_Catering::query() (line 1048) via CRM inbox (class-doughboss-crm.php:45) | [CONFIRM: acceptable lag] | UNSEEN |
 | Orders | {prefix}doughboss_orders/items/events (class-doughboss-order.php:630,640,650) + Square pickup snapshot (line 332) | WordPress plugin governs orders (owner decision); Square supplies pickup data | Order model reads | [CONFIRM: acceptable lag] | UNSEEN |
 | Customers/contacts | No dedicated table; lives in enquiry rows (INFERRED) | Enquiry creation | Same table | n/a | UNSEEN |
-| Menu/catalogue | Not in this plugin's tables (INFERRED; Square or WordPress) [CONFIRM: where is the menu stored?] | [CONFIRM] | Not read by CRM today | n/a | UNSEEN / not configured |
+| Menu/catalogue | Square and WordPress both (owner answer 2026-11-01); [CONFIRM: which wins and sync direction] | [CONFIRM] | Not read by CRM today | n/a | UNSEEN / not configured |
 | Payments | Square only (owner decision) | Square | No live payment read in CRM today; Square modules loaded (class-doughboss.php:98-100) but CRM inbox does not call them | [CONFIRM] | UNSEEN |
 | Loyalty/vouchers/membership | Square (owner decision); plugin "never enrols anyone" (class-doughboss-square-loyalty.php:11) | Square | Not read by CRM today | [CONFIRM] | UNSEEN / not configured |
 | Staff and clock-in | Timeclock module (class-doughboss-timeclock.php) | Staff via clock portal (class-doughboss-portals.php:119) | Not read by CRM today | [CONFIRM] | UNSEEN |
@@ -61,11 +61,17 @@ Cards 1-2 need no new data; 3-8 need new reads or new scoping and come later.
 4. **Approval + awaiting-payment cards.** Acceptance: pending, approved_unpaid and payment-in-progress counts from the preorder-approval table; no action buttons (read-only, per docs/implementation/CRM-EXECUTION-PLAN-20261030.md:130). Tests: state fixtures; UNSEEN on error. Switch default off.
 5. **Reports link card + Square snapshot card (Revesby).** Acceptance: links to existing reports; order snapshot shows UNSEEN when Square read fails. Tests: fixture + injected failure. Switch default off.
 
-## 6. Open questions for Elie
+## 6. Owner answers (Elie, 2026-11-01)
 
-1. What max staleness is acceptable per domain before a card must say UNSEEN?
-2. Should Charlie get a WordPress capability, or is the Telegram bot his only entry?
-3. Where is the menu/catalogue actually stored (Square, WordPress, other)?
-4. Does Kristy need a distinct approver capability, or does she use manage_doughboss?
-5. Any staff-facing card at all, or is the home screen manager-and-above only?
-6. Should per-shop cards appear before or after the all-store owner view is proven?
+1. Max staleness per domain before a card says UNSEEN: **team decision** - open until the team sets it; until then each card shows its read time and goes UNSEEN only on a failed read.
+2. Charlie: **both** - a WordPress login (all shops) and the DoughBoss HQ Telegram bot.
+3. Menu/catalogue: **Square and WordPress** both hold it. Which one wins when they disagree, and which way they sync, is [CONFIRM: menu sync direction].
+4. Kristy: **yes**, she gets her own catering approver role.
+5. Staff: **yes**, staff see cards. Build two roles: **manager** (own shop) and **staff** (own shop, own shift). Which cards staff see is [CONFIRM: staff card list].
+6. Per-shop manager view before or after the all-shop owner view: **team vote** - open.
+
+### What changes because of these answers
+- New roles to add (default off, one slice before slice 3): `doughboss_catering_approver` for Kristy; a shop **manager** role and a shop **staff** role, each bound to one `doughboss_location_id`; Charlie keeps an all-shop capability.
+- Card visibility gains a staff column; staff cards are limited to their own shop and shift.
+- The menu row in section 3 stays [CONFIRM] until the sync direction is decided.
+- Slices 1-2 can proceed now; the order of slice 3 waits on the team vote.
