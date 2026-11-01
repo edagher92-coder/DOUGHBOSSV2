@@ -38,3 +38,40 @@ body.doughboss-management-portal { background: #f6f2eb; color: #211a15; }
 @media (pointer: coarse) { .db-portal-modes a, .db-portal-account a, .db-portal-action { min-height: 52px; padding-inline: 1rem; } }
 @media (max-width: 900px) { .db-portal-bar { align-items: stretch; flex-wrap: wrap; } .db-portal-account { margin-left: 0; width: 100%; } .db-portal-user { display: none; } body.doughboss-staff-kitchen .db-board-bar { top: 116px; } }
 @media (max-width: 620px) { .db-portal-modes { flex: 1; } .db-portal-modes a { flex: 1; min-width: 0; } .db-portal-clock, .db-portal-action { display: none; } .db-portal-account a { flex: 1; } }
+
+/* CRM inbox */
+.db-crm { color: #0d0d0d; }
+.db-crm h1 { font-size: clamp(1.75rem, 3vw, 2.4rem); line-height: 1.15; margin: 0 0 .5rem; }
+.db-crm-intro { color: #494641; line-height: 1.5; margin: 0 0 1.25rem; max-width: 65ch; }
+.db-crm-filters { align-items: end; background: #f7f5f0; border: 1px solid #d8d4cc; border-radius: 12px; display: flex; flex-wrap: wrap; gap: .75rem; padding: 1rem; }
+.db-crm-filters label { display: flex; flex: 1 1 12rem; flex-direction: column; font-weight: 700; gap: .35rem; min-width: 0; }
+.db-crm-filters input, .db-crm-filters select { background: #fff; border: 1px solid #77736d; border-radius: 6px; color: #0d0d0d; font: inherit; min-height: 44px; min-width: 0; padding: .55rem .65rem; width: 100%; }
+.db-crm-filters button, .db-crm-filters a, .db-crm-actions a, .db-crm-pagination a { align-items: center; border: 1px solid #0d0d0d; border-radius: 6px; display: inline-flex; font: inherit; font-weight: 700; justify-content: center; min-height: 44px; padding: .55rem .9rem; text-decoration: none; }
+.db-crm-filters button { background: #0d0d0d; color: #fff; cursor: pointer; }
+.db-crm-filters a, .db-crm-actions a, .db-crm-pagination a { background: #fff; color: #0d0d0d; }
+.db-crm :is(a, button, input, select):focus-visible { outline: 3px solid #c92017; outline-offset: 3px; }
+.db-crm-summary { font-weight: 700; margin: 1.25rem 0 .75rem; }
+.db-crm-list { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); list-style: none; margin: 0; padding: 0; }
+.db-crm-card { background: #fff; border: 1px solid #d8d4cc; border-radius: 12px; min-width: 0; overflow-wrap: anywhere; padding: 1rem; }
+.db-crm-card h2 { font-size: 1.15rem; line-height: 1.3; margin: 0 0 .5rem; }
+.db-crm-contact { line-height: 1.5; margin: 0 0 .75rem; }
+.db-crm-contact a { color: #c92017; }
+.db-crm-status { background: #f7f5f0; border: 1px solid #d8d4cc; border-radius: 999px; color: #0d0d0d; display: inline-block; font-size: .85rem; font-weight: 700; line-height: 1.3; padding: .3rem .65rem; }
+.db-crm-details { border-top: 1px solid #e4e0d9; display: grid; gap: .65rem; margin: 1rem 0; padding-top: 1rem; }
+.db-crm-details div { display: grid; gap: .15rem; }
+.db-crm-details dt { color: #494641; font-size: .85rem; font-weight: 700; }
+.db-crm-details dd { line-height: 1.4; margin: 0; }
+.db-crm-actions { margin-top: 1rem; }
+.db-crm-pagination { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.25rem; }
+.db-crm-notice, .db-crm-error { background: #f7f5f0; border: 1px solid #d8d4cc; border-left: 4px solid #0d0d0d; border-radius: 6px; line-height: 1.5; margin: 1rem 0; overflow-wrap: anywhere; padding: .85rem 1rem; }
+.db-crm-error { border-left-color: #c92017; }
+@media (min-width: 620px) { .db-crm-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 980px) { .db-crm-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+
+/* Management Home (read-only CRM cards; off until crm_home_enabled). */
+.db-home { color: #0d0d0d; }
+.db-home h1 { font-size: clamp(1.75rem, 3vw, 2.4rem); line-height: 1.15; margin: 0 0 1rem; }
+.db-home-card { background: #fff; border: 1px solid #d8d4cc; border-radius: 12px; max-width: 28rem; min-width: 0; overflow-wrap: anywhere; padding: 1rem; }
+.db-home-card h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
+.db-home-card a { align-items: center; background: #fff; border: 1px solid #0d0d0d; border-radius: 6px; color: #0d0d0d; display: inline-flex; font-weight: 700; min-height: 44px; padding: .55rem .9rem; text-decoration: none; }
