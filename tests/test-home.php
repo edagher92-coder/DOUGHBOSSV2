@@ -47,6 +47,16 @@ function wp_strip_all_tags_for_home_test( $html ) {
 	return html_entity_decode( strip_tags( $html ), ENT_QUOTES, 'UTF-8' );
 }
 
+/** The markup of the nth home card (0-based), so a check on one card never reads another card's numbers. */
+function db_home_card_html( $html, $index ) {
+	$parts = explode( '<div class="db-home-card">', $html );
+	if ( ! isset( $parts[ $index + 1 ] ) ) {
+		return '';
+	}
+	$end = strpos( $parts[ $index + 1 ], '</div>' );
+	return false === $end ? $parts[ $index + 1 ] : substr( $parts[ $index + 1 ], 0, $end );
+}
+
 /** Set the capabilities for whichever current_user_can() shim is live. */
 function db_home_set_caps( array $caps ) {
 	$GLOBALS['db_home_caps'] = $caps;
@@ -109,10 +119,13 @@ db_test( 'Home card is unseen on read failure without leaking errors or numbers'
 			ob_start();
 			DoughBoss_Home::render();
 			$html = ob_get_clean();
-			assert_true( false !== strpos( $html, 'Unseen' ), $failure . ' render says Unseen' );
+			$enquiries = db_home_card_html( $html, 0 );
+			assert_true( false !== strpos( $enquiries, 'New catering enquiries' ), $failure . ' first card is the enquiries card' );
+			assert_true( false !== strpos( $enquiries, 'Unseen' ), $failure . ' render says Unseen' );
 			assert_false( false !== strpos( $html, 'SQL secret' ), $failure . ' render hides database details' );
-			// Visible text only: tag names such as h1/h2 carry digits of their own.
-			assert_false( (bool) preg_match( '/[0-9]/', wp_strip_all_tags_for_home_test( $html ) ), $failure . ' render shows no digit count' );
+			// Visible text of this card only: tag names such as h2 carry digits of their own, and the
+			// production card beside it may genuinely be live with a count and read time.
+			assert_false( (bool) preg_match( '/[0-9]/', wp_strip_all_tags_for_home_test( $enquiries ) ), $failure . ' render shows no digit count' );
 			$db->$failure = false;
 		}
 	} );
@@ -149,5 +162,66 @@ db_test( 'Home performs no database writes', function () {
 		assert_same( array(), $db->replaces, 'no replaces' );
 		assert_true( count( $db->reads ) > 0, 'the card did read' );
 		assert_same( array(), array_values( array_filter( $db->reads, function ( $sql ) { return 0 !== stripos( ltrim( $sql ), 'select' ); } ) ), 'every query is a SELECT' );
+	} );
+} );
+
+db_test( 'Production card is live with the real committed-job count', function () {
+	db_home_with_fixture( function ( $db ) {
+		$db->total = 5;
+		$card = DoughBoss_Home::card_production_queue();
+		assert_same( 'live', $card['state'], 'successful read is live' );
+		assert_same( 5, $card['count'], 'count comes from the real count' );
+		assert_true( isset( $card['read_at'] ), 'read time recorded' );
+		assert_same( 1, count( $db->reads ), 'one count read, no row list' );
+		assert_true( false !== stripos( $db->reads[0], 'SELECT COUNT(*)' ), 'it is a count query' );
+		assert_true( false !== strpos( $db->reads[0], 'status IN (%s, %s, %s, %s)' ), 'filtered to the production statuses' );
+		assert_same( array( 'deposit_paid', 'confirmed', 'balance_due', 'paid' ), $db->prepared[0][1], 'new, quoted, fulfilled and lost are not production' );
+	} );
+} );
+
+db_test( 'Production card is live with 0 only when there are genuinely no jobs', function () {
+	db_home_with_fixture( function ( $db ) {
+		$db->total = 0;
+		$card = DoughBoss_Home::card_production_queue();
+		assert_same( 'live', $card['state'], 'a real zero is live' );
+		assert_same( 0, $card['count'], 'real zero count is 0' );
+	} );
+} );
+
+db_test( 'Production card is unseen, never 0, when the count fails', function () {
+	db_home_with_fixture( function ( $db ) {
+		$db->fail_count = true;
+		$card = DoughBoss_Home::card_production_queue();
+		assert_same( 'unseen', $card['state'], 'failed count is unseen' );
+		assert_same( 'doughboss_production_queue_unavailable', $card['reason'], 'reason names the queue' );
+		assert_false( array_key_exists( 'count', $card ), 'no count key' );
+		$db->fail_count = false;
+		$db->total      = null;
+		$card = DoughBoss_Home::card_production_queue();
+		assert_same( 'unseen', $card['state'], 'a null count with no error text is unseen too' );
+		ob_start();
+		DoughBoss_Home::render();
+		$queue = db_home_card_html( ob_get_clean(), 1 );
+		assert_true( false !== strpos( $queue, 'Catering production queue' ), 'second card is the production card' );
+		assert_true( false !== strpos( $queue, 'Unseen' ), 'render says Unseen' );
+		assert_false( (bool) preg_match( '/[0-9]/', wp_strip_all_tags_for_home_test( $queue ) ), 'render shows no digit count' );
+	} );
+} );
+
+db_test( 'Production card is unseen with zero reads when denied', function () {
+	db_home_with_fixture( function ( $db ) {
+		db_home_set_caps( array() );
+		$card = DoughBoss_Home::card_production_queue();
+		assert_same( 'unseen', $card['state'], 'denied read is unseen' );
+		assert_same( 'doughboss_crm_forbidden', $card['reason'], 'denial reason is the CRM forbidden code' );
+		assert_same( 0, count( $db->reads ), 'denial performs no database read' );
+	} );
+} );
+
+db_test( 'The old production count still returns 0 on failure for its existing callers', function () {
+	db_home_with_fixture( function ( $db ) {
+		$db->fail_count = true;
+		assert_same( 0, DoughBoss_Catering::production_queue_count( 0 ), 'unchanged behaviour of the legacy method' );
+		assert_true( is_wp_error( DoughBoss_Catering::production_queue_count_checked( 0 ) ), 'the checked method reports the failure' );
 	} );
 } );
