@@ -284,7 +284,7 @@ db_test( 'A live card shows its real count, including a visible 0, with its read
 				$card = db_home_card_html( $html, $index );
 				assert_true( false !== strpos( $card, $title ), $title . ' is card ' . $index );
 				assert_true( false !== strpos( $card, '<p>' . $count . '</p>' ), $title . ' shows ' . $count . ' as a number, never blank' );
-				assert_true( (bool) preg_match( '/Read at <time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/', $card ), $title . ' shows when it was read' );
+				assert_true( (bool) preg_match( '/Read at <time datetime="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^"]*">[^<]+<\/time>/', $card ), $title . ' shows when it was read' );
 				assert_false( false !== strpos( $card, 'Unseen' ), $title . ' live card never says Unseen' );
 				assert_true( false !== strpos( $card, '<a href=' ), $title . ' links to its list' );
 			}

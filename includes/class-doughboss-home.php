@@ -10,12 +10,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class DoughBoss_Home {
 	/**
-	 * Whether the home section is switched on.
+	 * On only for 1 (as stored: 1, '1' or true); any other value, including text such as 'yes' or 'false', is off.
 	 *
 	 * @return bool
 	 */
 	public static function is_enabled() {
-		return (bool) DoughBoss_Settings::get( 'crm_home_enabled', 0 );
+		$value = DoughBoss_Settings::get( 'crm_home_enabled', 0 );
+		return 1 === $value || '1' === $value || true === $value;
 	}
 
 	/**
@@ -115,7 +116,9 @@ class DoughBoss_Home {
 		echo '<h2>' . esc_html( $title ) . '</h2>';
 		if ( isset( $card['state'] ) && 'live' === $card['state'] ) {
 			echo '<p>' . esc_html( $card['count'] ) . '</p>';
-			echo '<p>' . esc_html__( 'Read at', 'doughboss' ) . ' <time>' . esc_html( $card['read_at'] ) . '</time></p>';
+			// People read the site-local time; the exact UTC time stays in datetime.
+			$read_ts = strtotime( $card['read_at'] );
+			echo '<p>' . esc_html__( 'Read at', 'doughboss' ) . ' <time datetime="' . esc_attr( $card['read_at'] ) . '">' . esc_html( false === $read_ts ? $card['read_at'] : wp_date( 'D j M, g:i a', $read_ts ) ) . '</time></p>';
 			echo '<a href="' . esc_url( $link_url ) . '">' . esc_html( $link_text ) . '</a>';
 		} else {
 			echo '<p>' . esc_html( $unseen_text ) . '</p>';

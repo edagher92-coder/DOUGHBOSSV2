@@ -1154,26 +1154,10 @@ class DoughBoss_Catering {
 	 * @return int
 	 */
 	public static function production_queue_count( $location_id = 0 ) {
-		global $wpdb;
-
-		$location_id = absint( $location_id );
-		$table       = self::table();
-		$where       = 'status IN (%s, %s, %s, %s)';
-		$params      = array(
-			self::STATUS_DEPOSIT,
-			self::STATUS_CONFIRMED,
-			self::STATUS_BALANCE_DUE,
-			self::STATUS_PAID,
-		);
-
-		if ( $location_id ) {
-			$where    .= ' AND location_id = %d';
-			$params[] = $location_id;
-		}
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE {$where}", $params ) );
-		return max( 0, (int) $count );
+		// The checked count holds the one copy of the query; this keeps its old answer (0) on a failed read
+		// for its existing caller. New screens use production_queue_count_checked(), which says "unseen".
+		$count = self::production_queue_count_checked( $location_id );
+		return is_wp_error( $count ) ? 0 : $count;
 	}
 
 	/**
