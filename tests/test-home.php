@@ -8,6 +8,13 @@ if ( ! function_exists( 'current_user_can' ) ) {
 	function current_user_can( $capability ) { return in_array( $capability, isset( $GLOBALS['db_home_caps'] ) ? $GLOBALS['db_home_caps'] : array(), true ); }
 }
 
+if ( ! function_exists( 'wp_date' ) ) {
+	/** The same deterministic stand-in the notifications suite uses: UTC, so the shown time is predictable. */
+	function wp_date( $format, $timestamp = null ) {
+		return gmdate( $format, (int) $timestamp );
+	}
+}
+
 /** Minimal query recorder for the real catering query. No writes or network. */
 class DoughBoss_Test_Home_DB {
 	public $prefix = 'wp_';
@@ -277,7 +284,7 @@ db_test( 'A live card shows its real count, including a visible 0, with its read
 				$card = db_home_card_html( $html, $index );
 				assert_true( false !== strpos( $card, $title ), $title . ' is card ' . $index );
 				assert_true( false !== strpos( $card, '<p>' . $count . '</p>' ), $title . ' shows ' . $count . ' as a number, never blank' );
-				assert_true( (bool) preg_match( '/Read at <time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/', $card ), $title . ' shows when it was read' );
+				assert_true( (bool) preg_match( '/Read at <time datetime="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^"]*">[^<]+<\/time>/', $card ), $title . ' shows when it was read' );
 				assert_false( false !== strpos( $card, 'Unseen' ), $title . ' live card never says Unseen' );
 				assert_true( false !== strpos( $card, '<a href=' ), $title . ' links to its list' );
 			}
@@ -303,4 +310,51 @@ db_test( 'A card escapes its title, link and text', function () {
 	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-home.php' );
 	assert_true( false !== strpos( $source, 'esc_url( $link_url )' ), 'the link is run through esc_url' );
 	assert_same( 1, substr_count( $source, '<a href=' ), 'the card has one link, the escaped one' );
+} );
+
+db_test( 'Home switch is on only for the documented 1, never for other truthy text', function () {
+	$old_options = $GLOBALS['doughboss_test_options'];
+	try {
+		foreach ( array( 1, '1', true ) as $on ) {
+			doughboss_test_set_settings( array( 'crm_home_enabled' => $on ) );
+			assert_true( DoughBoss_Home::is_enabled(), 'on: ' . var_export( $on, true ) );
+		}
+		foreach ( array( 0, '0', '', null, false, 'false', 'no', 'off', 'yes', 2, '2', '1 ', array( 1 ) ) as $off ) {
+			doughboss_test_set_settings( array( 'crm_home_enabled' => $off ) );
+			assert_false( DoughBoss_Home::is_enabled(), 'off: ' . var_export( $off, true ) );
+		}
+	} finally {
+		$GLOBALS['doughboss_test_options'] = $old_options;
+	}
+} );
+
+db_test( 'A live card shows its read time for people, with the exact time kept in datetime', function () {
+	db_home_with_fixture( function ( $db ) {
+		$db->total = 2;
+		ob_start();
+		DoughBoss_Home::render();
+		$card = db_home_card_html( ob_get_clean(), 0 );
+		$matched = preg_match( '/Read at <time datetime="([^"]+)">([^<]+)<\/time>/', $card, $m );
+		assert_true( (bool) $matched, 'the read time is a <time> with a datetime attribute' );
+		if ( $matched ) {
+			$at = strtotime( $m[1] );
+			assert_true( false !== $at && abs( time() - $at ) < 120, 'datetime is the real read time, ISO 8601' );
+			assert_same( wp_date( 'D j M, g:i a', $at ), $m[2], 'the shown time is the site-local short form' );
+			assert_false( false !== strpos( $m[2], 'T' ) && false !== strpos( $m[2], '+00:00' ), 'not a raw ISO string' );
+		}
+	} );
+} );
+
+db_test( 'The old production count reads through the checked one: same count when it reads', function () {
+	db_home_with_fixture( function ( $db ) {
+		$db->total = 4;
+		assert_same( 4, DoughBoss_Catering::production_queue_count( 0 ), 'same number as the checked count' );
+		assert_same( 1, count( $db->reads ), 'one query, the checked one' );
+	} );
+	// One query in one place: the old method wraps the checked one, so the two can never drift apart.
+	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-catering.php' );
+	$start  = strpos( $source, 'public static function production_queue_count(' );
+	$body   = substr( $source, $start, strpos( $source, 'public static function', $start + 10 ) - $start );
+	assert_true( false !== strpos( $body, 'self::production_queue_count_checked(' ), 'the old count calls the checked one' );
+	assert_false( false !== stripos( $body, 'SELECT' ), 'and has no query of its own' );
 } );
