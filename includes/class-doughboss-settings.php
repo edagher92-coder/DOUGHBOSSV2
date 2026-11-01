@@ -166,6 +166,8 @@ class DoughBoss_Settings {
 			'catering_phone'  => '0422487487',
 			// Minimum catering notice in business days (Sat/Sun don't count).
 			'catering_min_notice_business_days' => 2,
+			// Management portal Home section (read-only CRM cards). Off until released.
+			'crm_home_enabled' => 0,
 			// Public WordPress page containing [doughboss_order_tracking].
 			// Blank is safe: emails still include the order number and matching-
 			// email instructions, but no potentially broken tracking link.
