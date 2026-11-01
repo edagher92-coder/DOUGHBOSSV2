@@ -358,3 +358,29 @@ db_test( 'The old production count reads through the checked one: same count whe
 	assert_true( false !== strpos( $body, 'self::production_queue_count_checked(' ), 'the old count calls the checked one' );
 	assert_false( false !== stripos( $body, 'SELECT' ), 'and has no query of its own' );
 } );
+
+db_test( 'A single shop count is filtered to that shop, through both production count methods', function () {
+	db_home_with_fixture( function ( $db ) {
+		$db->total = 2;
+		foreach ( array( 'production_queue_count', 'production_queue_count_checked' ) as $method ) {
+			$db->reads    = array();
+			$db->prepared = array();
+			assert_same( 2, DoughBoss_Catering::$method( 3 ), $method . ': the count' );
+			assert_true( false !== strpos( $db->reads[0], 'AND location_id = %d' ), $method . ': filtered by shop' );
+			assert_same( 3, end( $db->prepared[0][1] ), $method . ': for shop 3, not every shop' );
+			$db->reads    = array();
+			$db->prepared = array();
+			DoughBoss_Catering::$method( 0 );
+			assert_false( false !== strpos( $db->reads[0], 'location_id' ), $method . ': 0 means every shop' );
+		}
+	} );
+} );
+
+db_test( 'The read time is formatted in the site timezone (wp_date), never in UTC (gmdate)', function () {
+	// The test wp_date stand-in is UTC, so the rendered text alone cannot tell the two apart: pin the call.
+	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-home.php' );
+	$start  = strpos( $source, 'private static function render_card(' );
+	$body   = substr( $source, $start );
+	assert_true( false !== strpos( $body, "wp_date( 'D j M, g:i a', \$read_ts )" ), 'render_card shows the time through wp_date' );
+	assert_false( false !== strpos( $body, 'gmdate(' ), 'and never formats it in UTC' );
+} );
