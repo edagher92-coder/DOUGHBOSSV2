@@ -265,3 +265,42 @@ db_test( 'The old production count still returns 0 on failure for its existing c
 		assert_true( is_wp_error( DoughBoss_Catering::production_queue_count_checked( 0 ) ), 'the checked method reports the failure' );
 	} );
 } );
+
+db_test( 'A live card shows its real count, including a visible 0, with its read time and link', function () {
+	db_home_with_fixture( function ( $db ) {
+		foreach ( array( 0, 7 ) as $count ) {
+			$db->total = $count;
+			ob_start();
+			DoughBoss_Home::render();
+			$html = ob_get_clean();
+			foreach ( array( 0 => 'New catering enquiries', 1 => 'Catering production queue' ) as $index => $title ) {
+				$card = db_home_card_html( $html, $index );
+				assert_true( false !== strpos( $card, $title ), $title . ' is card ' . $index );
+				assert_true( false !== strpos( $card, '<p>' . $count . '</p>' ), $title . ' shows ' . $count . ' as a number, never blank' );
+				assert_true( (bool) preg_match( '/Read at <time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/', $card ), $title . ' shows when it was read' );
+				assert_false( false !== strpos( $card, 'Unseen' ), $title . ' live card never says Unseen' );
+				assert_true( false !== strpos( $card, '<a href=' ), $title . ' links to its list' );
+			}
+		}
+	} );
+} );
+
+db_test( 'A card escapes its title, link and text', function () {
+	$method = new ReflectionMethod( 'DoughBoss_Home', 'render_card' );
+	$method->setAccessible( true );
+	$hostile = '<script>x</script>';
+	foreach ( array(
+		array( 'state' => 'live', 'count' => 1, 'read_at' => '<b>t</b>' ),
+		array( 'state' => 'unseen', 'reason' => 'x' ),
+	) as $card ) {
+		ob_start();
+		$method->invoke( null, $hostile, $card, 'javascript:alert(1)', $hostile, $hostile );
+		$html = ob_get_clean();
+		assert_false( false !== strpos( $html, '<script>' ), $card['state'] . ': no raw script tag' );
+		assert_false( false !== strpos( $html, '<b>t</b>' ), $card['state'] . ': the read time is escaped' );
+	}
+	// The test esc_url() stand-in does not strip schemes the way WordPress does, so pin the call itself.
+	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-home.php' );
+	assert_true( false !== strpos( $source, 'esc_url( $link_url )' ), 'the link is run through esc_url' );
+	assert_same( 1, substr_count( $source, '<a href=' ), 'the card has one link, the escaped one' );
+} );
