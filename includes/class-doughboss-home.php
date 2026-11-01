@@ -19,16 +19,44 @@ class DoughBoss_Home {
 	}
 
 	/**
+	 * The management section to show for a requested ?section= value.
+	 *
+	 * Only the exact values count. "home" exists only while the switch is on;
+	 * anything else, including "home" with the switch off, is the overview.
+	 *
+	 * @param mixed $requested The raw request value, or null when absent.
+	 * @return string home, crm or overview.
+	 */
+	public static function management_section( $requested ) {
+		if ( ! is_string( $requested ) ) {
+			return 'overview';
+		}
+		if ( 'crm' === $requested ) {
+			return 'crm';
+		}
+		if ( 'home' === $requested && self::is_enabled() ) {
+			return 'home';
+		}
+		return 'overview';
+	}
+
+	/**
 	 * Count of new catering enquiries, or the reason the read failed.
+	 *
+	 * A count only: no enquiry rows (and so no customer details) are read for
+	 * the home screen. A failed read is unseen, never a count of zero.
 	 *
 	 * @return array
 	 */
 	public static function card_new_enquiries() {
-		$result = DoughBoss_CRM::inbox( array( 'crm_status' => 'new' ) );
+		if ( ! DoughBoss_CRM::can_access() ) {
+			return array( 'state' => 'unseen', 'reason' => 'doughboss_crm_forbidden' );
+		}
+		$result = DoughBoss_Catering::status_count_checked( DoughBoss_Catering::STATUS_NEW );
 		if ( is_wp_error( $result ) ) {
 			return array( 'state' => 'unseen', 'reason' => $result->get_error_code() );
 		}
-		return array( 'state' => 'live', 'count' => (int) $result['total'], 'read_at' => gmdate( 'c' ) );
+		return array( 'state' => 'live', 'count' => (int) $result, 'read_at' => gmdate( 'c' ) );
 	}
 
 	/**

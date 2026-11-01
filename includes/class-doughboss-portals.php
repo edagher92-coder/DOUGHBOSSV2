@@ -243,15 +243,12 @@ class DoughBoss_Portals {
 			wp_die( esc_html__( 'You do not have permission to view management.', 'doughboss' ), esc_html__( 'Management access required', 'doughboss' ), array( 'response' => 403 ) );
 		}
 
-		// Read-only selector; only the exact CRM value changes the manager view.
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$section = isset( $_GET['section'] ) && is_string( $_GET['section'] ) && 'crm' === $_GET['section'] ? 'crm' : 'overview';
-		// The Home section exists only while its switch is on; off, the exact value falls back to the overview.
+		// Read-only selector; only exact values change the manager view, and Home exists only while its
+		// switch is on (off, ?section=home falls back to the overview). DoughBoss_Home::management_section() decides.
 		$home_enabled = class_exists( 'DoughBoss_Home' ) && DoughBoss_Home::is_enabled();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		if ( $home_enabled && isset( $_GET['section'] ) && is_string( $_GET['section'] ) && 'home' === $_GET['section'] ) {
-			$section = 'home';
-		}
+		$requested    = isset( $_GET['section'] ) ? $_GET['section'] : null;
+		$section      = class_exists( 'DoughBoss_Home' ) ? DoughBoss_Home::management_section( $requested ) : ( 'crm' === $requested ? 'crm' : 'overview' );
 		require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-admin.php';
 		$this->render_head( __( 'Management — DoughBoss', 'doughboss' ), 'management' );
 		?>

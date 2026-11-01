@@ -1,6 +1,6 @@
-# CRM home screen and source of truth (design only)
+# CRM home screen and source of truth
 
-Date: 2026-11-01. Branch: qwen/doughboss-home-sot. Design doc only; no code in this change.
+Date: 2026-11-01. Design written first (branch qwen/doughboss-home-sot); slices 1-2 are now built (section 7). Line references in sections 1-4 describe the code as it was before slice 1.
 Owner decisions are labelled "owner decision". Unknowns are [CONFIRM: ...].
 Silence rule (owner decision): a source that could not be read shows UNSEEN, never 0, empty or "all clear".
 
@@ -50,12 +50,12 @@ Cards 1-2 need no new data; 3-8 need new reads or new scoping and come later.
 - No Telegram adapter in this repo (docs/implementation/CRM-EXECUTION-PLAN-20261030.md:43); Hermes bot is external and unverified live.
 - Square live merchant/location/settlement not verified in code; only components exist (class-doughboss.php:98-100).
 - Customers/contacts domain has no dedicated table (INFERRED).
-- No home screen aggregation exists; only the single CRM inbox section (class-doughboss-portals.php:248).
+- No home screen aggregation existed before slice 1; only the single CRM inbox section (class-doughboss-portals.php:248, before slice 1).
 - Catering query has no location filter (class-doughboss-catering.php:1048) - per-shop cards need one.
 
 ## 5. Slices (smallest first, switches default-off)
 
-1. **Home shell + catering inbox card.** Acceptance: new "home" section in management portal renders the existing inbox card; UNSEEN banner on DB error; no writes on render. Tests: extend tests/test-crm.php patterns - capability denial, UNSEEN on injected DB error, no SQL on denial. Switch: doughboss_home_enabled, default off.
+1. **Home shell + catering inbox card.** Acceptance: new "home" section in management portal renders the existing inbox card; UNSEEN banner on DB error; no writes on render. Tests: extend tests/test-crm.php patterns - capability denial, UNSEEN on injected DB error, no SQL on denial. Switch: `crm_home_enabled`, default off. (Built as count cards rather than the inbox list: see section 7.)
 2. **New-enquiries + production-queue cards.** Acceptance: counts from existing table; UNSEEN on error; per-page-free single count query. Tests: fixture rows by status; error path shows UNSEEN not 0. Switch default off.
 3. **Location scoping for managers.** Acceptance: manager with doughboss_location_id sees own-shop cards only; owner/co-owner see all; unassigned multi-store user gets UNSEEN not all. Tests: staff-scope matrix (class-doughboss-staff-scope.php:41) against card visibility. Switch default off.
 4. **Approval + awaiting-payment cards.** Acceptance: pending, approved_unpaid and payment-in-progress counts from the preorder-approval table; no action buttons (read-only, per docs/implementation/CRM-EXECUTION-PLAN-20261030.md:130). Tests: state fixtures; UNSEEN on error. Switch default off.
@@ -75,3 +75,12 @@ Cards 1-2 need no new data; 3-8 need new reads or new scoping and come later.
 - Card visibility gains a staff column; staff cards are limited to their own shop and shift.
 - The menu row in section 3 stays [CONFIRM] until the sync direction is decided.
 - Slices 1-2 can proceed now; the order of slice 3 waits on the team vote.
+
+## 7. What is built (slices 1-2)
+
+- **Switch:** `crm_home_enabled` in the DoughBoss settings option (`class-doughboss-settings.php`), default **0**. There is **no admin checkbox** for it yet: it is turned on by setting `crm_home_enabled` to 1 in the `doughboss_settings` option. That is deliberate: the owner turns it on when the cards are released.
+- **Section:** `DoughBoss_Home::management_section()` decides the management section. `?section=home` is Home only while the switch is on; off, it falls back to the overview. The Home nav link shows only while it is on. The overview stays the default.
+- **Card: New catering enquiries.** The number of enquiries in status `new`, of every date (not only today's), from `DoughBoss_Catering::status_count_checked()`: a single count query that reads no enquiry rows, so no customer details. The link opens the CRM filtered to `new`.
+- **Card: Catering production queue.** The number of jobs in deposit_paid, confirmed, balance_due or paid, from `DoughBoss_Catering::production_queue_count_checked()`. The older `production_queue_count()` returns 0 on a failed query and is kept as it was for its existing REST caller. The link opens the CRM unfiltered: the CRM filters one status at a time, so its list is not the same set as this count. [CONFIRM: a production-queue filter in the CRM list]
+- **Both cards:** they need management access (manage_doughboss or manage_options); a person without it causes no database read. A failed or empty read shows "Unseen", never a number. Each card shows the time it was read, as ISO 8601 UTC for now. Rendering only reads.
+- **Not yet:** shop scoping (slice 3: today both counts cover every shop), the approval and awaiting-payment cards (slice 4), and the reports and Square cards (slice 5).

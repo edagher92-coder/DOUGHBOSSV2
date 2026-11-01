@@ -1213,6 +1213,30 @@ class DoughBoss_Catering {
 	}
 
 	/**
+	 * Count enquiries in one status, or say the count could not be read.
+	 *
+	 * A count only: no rows, so no customer details, are read. A failed or empty
+	 * answer is a WP_Error, never 0, so a home card shows it as unseen.
+	 *
+	 * @param string $status A lifecycle status from statuses().
+	 * @return int|WP_Error
+	 */
+	public static function status_count_checked( $status ) {
+		global $wpdb;
+
+		if ( ! is_string( $status ) || ! self::is_valid_status( $status ) ) {
+			return new WP_Error( 'doughboss_catering_status_invalid', __( 'Unknown catering status.', 'doughboss' ), array( 'status' => 400 ) );
+		}
+		$table = self::table();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", array( $status ) ) );
+		if ( ! empty( $wpdb->last_error ) || null === $count || ! is_numeric( $count ) ) {
+			return new WP_Error( 'doughboss_catering_count_unavailable', __( 'Catering enquiries could not be counted.', 'doughboss' ), array( 'status' => 500 ) );
+		}
+		return max( 0, (int) $count );
+	}
+
+	/**
 	 * Generate a unique, human-readable enquiry number (CAT-YYMMDD-XXXX).
 	 *
 	 * @return string

@@ -7,11 +7,6 @@ require_once dirname( __DIR__ ) . '/includes/class-doughboss-home.php';
 if ( ! function_exists( 'current_user_can' ) ) {
 	function current_user_can( $capability ) { return in_array( $capability, isset( $GLOBALS['db_home_caps'] ) ? $GLOBALS['db_home_caps'] : array(), true ); }
 }
-if ( ! class_exists( 'DoughBoss_Settings' ) ) {
-	class DoughBoss_Settings {
-		public static function get( $key, $default = null ) { return isset( $GLOBALS['db_home_settings'][ $key ] ) ? $GLOBALS['db_home_settings'][ $key ] : $default; }
-	}
-}
 
 /** Minimal query recorder for the real catering query. No writes or network. */
 class DoughBoss_Test_Home_DB {
@@ -73,26 +68,69 @@ function db_home_with_fixture( $callback ) {
 	$old_caps = $had_caps ? $GLOBALS['db_home_caps'] : null;
 	$had_crm_caps = array_key_exists( 'db_crm_caps', $GLOBALS );
 	$old_crm_caps = $had_crm_caps ? $GLOBALS['db_crm_caps'] : null;
-	$had_settings = array_key_exists( 'db_home_settings', $GLOBALS );
-	$old_settings = $had_settings ? $GLOBALS['db_home_settings'] : null;
+	$old_options = $GLOBALS['doughboss_test_options'];
 	$db = new DoughBoss_Test_Home_DB();
 	$GLOBALS['wpdb'] = $db;
 	db_home_set_caps( array( 'manage_doughboss' ) );
-	$GLOBALS['db_home_settings'] = array( 'crm_home_enabled' => 1 );
+	doughboss_test_set_settings( array( 'crm_home_enabled' => 1 ) );
 	try { $callback( $db ); } finally {
 		if ( $had_db ) { $GLOBALS['wpdb'] = $old_db; } else { unset( $GLOBALS['wpdb'] ); }
 		if ( $had_caps ) { $GLOBALS['db_home_caps'] = $old_caps; } else { unset( $GLOBALS['db_home_caps'] ); }
 		if ( $had_crm_caps ) { $GLOBALS['db_crm_caps'] = $old_crm_caps; } else { unset( $GLOBALS['db_crm_caps'] ); }
-		if ( $had_settings ) { $GLOBALS['db_home_settings'] = $old_settings; } else { unset( $GLOBALS['db_home_settings'] ); }
+		$GLOBALS['doughboss_test_options'] = $old_options;
 	}
 }
 
-db_test( 'Home switch is off by default', function () {
-	$had_settings = array_key_exists( 'db_home_settings', $GLOBALS );
-	$old_settings = $had_settings ? $GLOBALS['db_home_settings'] : null;
-	unset( $GLOBALS['db_home_settings'] );
-	assert_false( DoughBoss_Home::is_enabled(), 'no setting means the home section is off' );
-	if ( $had_settings ) { $GLOBALS['db_home_settings'] = $old_settings; }
+db_test( 'Home switch is off by default and on only when the real setting says so', function () {
+	$old_options = $GLOBALS['doughboss_test_options'];
+	try {
+		// Through the real DoughBoss_Settings (bootstrap.php loads it): the shipped default is off.
+		assert_same( 0, DoughBoss_Settings::defaults()['crm_home_enabled'], 'the shipped default is 0' );
+		doughboss_test_set_settings( array() );
+		assert_false( DoughBoss_Home::is_enabled(), 'nothing stored means off' );
+		doughboss_test_set_settings( array( 'crm_home_enabled' => 0 ) );
+		assert_false( DoughBoss_Home::is_enabled(), '0 is off' );
+		doughboss_test_set_settings( array( 'crm_home_enabled' => 1 ) );
+		assert_true( DoughBoss_Home::is_enabled(), '1 is on' );
+	} finally {
+		$GLOBALS['doughboss_test_options'] = $old_options;
+	}
+} );
+
+db_test( 'Home section is reachable only while the switch is on; other values keep their sections', function () {
+	$old_options = $GLOBALS['doughboss_test_options'];
+	try {
+		doughboss_test_set_settings( array( 'crm_home_enabled' => 0 ) );
+		assert_same( 'overview', DoughBoss_Home::management_section( 'home' ), 'off: ?section=home falls back to the overview' );
+		assert_same( 'crm', DoughBoss_Home::management_section( 'crm' ), 'off: the CRM stays reachable' );
+		assert_same( 'overview', DoughBoss_Home::management_section( null ), 'off: no section is the overview' );
+		doughboss_test_set_settings( array( 'crm_home_enabled' => 1 ) );
+		assert_same( 'home', DoughBoss_Home::management_section( 'home' ), 'on: ?section=home is Home' );
+		assert_same( 'crm', DoughBoss_Home::management_section( 'crm' ), 'on: the CRM stays reachable' );
+		assert_same( 'overview', DoughBoss_Home::management_section( null ), 'on: the default section is still the overview' );
+		foreach ( array( 'HOME', 'home ', 'Home', '', 'overview', 'crm2' ) as $other ) {
+			assert_same( 'overview', DoughBoss_Home::management_section( $other ), 'only exact values count: ' . var_export( $other, true ) );
+		}
+		assert_same( 'overview', DoughBoss_Home::management_section( array( 'home' ) ), 'an array is not a section' );
+	} finally {
+		$GLOBALS['doughboss_test_options'] = $old_options;
+	}
+} );
+
+db_test( 'The management portal takes its section from management_section and shows the Home link only when on', function () {
+	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-portals.php' );
+	$start  = strpos( $source, 'private function render_management()' );
+	assert_true( false !== $start, 'render_management exists' );
+	$body = substr( $source, $start, 6000 );
+	assert_true( false !== strpos( $body, '$home_enabled = class_exists( \'DoughBoss_Home\' ) && DoughBoss_Home::is_enabled();' ), 'the nav guard reads the switch' );
+	assert_true( false !== strpos( $body, 'DoughBoss_Home::management_section( $requested )' ), 'the section comes from management_section' );
+	assert_same( 0, substr_count( $body, "'home' === \$_GET" ) + substr_count( $body, "'home' === \$requested" ), 'no other, unguarded path to the home section' );
+	$link = strpos( $body, "home_url( '/management/?section=home' )" );
+	$guard = strrpos( substr( $body, 0, $link ), '<?php if ( $home_enabled ) : ?>' );
+	$end   = strpos( $body, '<?php endif; ?>', $guard );
+	assert_true( false !== $link && false !== $guard && $end > $link, 'the Home nav link sits inside if ( $home_enabled )' );
+	assert_true( (bool) preg_match( "/if \\( 'home' === \\\$section \\) \\{\\s*DoughBoss_Home::render\\(\\);/", $body ), 'Home renders only for the home section' );
+	assert_same( 1, substr_count( $body, 'DoughBoss_Home::render()' ), 'Home renders in one place only' );
 } );
 
 db_test( 'Home card is live with a real count and reads only new enquiries', function () {
@@ -102,17 +140,18 @@ db_test( 'Home card is live with a real count and reads only new enquiries', fun
 		assert_same( 'live', $card['state'], 'successful read is live' );
 		assert_same( 3, $card['count'], 'count comes from the real total' );
 		assert_true( isset( $card['read_at'] ), 'read time recorded' );
-		assert_same( 2, count( $db->reads ), 'one count and one list read' );
-		assert_true( false !== strpos( $db->reads[0], "WHERE 1=1 AND status = %s" ), 'count SQL filters on status' );
+		assert_same( 1, count( $db->reads ), 'one count read, no enquiry rows (no customer details) read' );
+		assert_true( false !== stripos( $db->reads[0], 'SELECT COUNT(*)' ), 'it is a count query' );
+		assert_true( false !== strpos( $db->reads[0], 'WHERE status = %s' ), 'count SQL filters on status' );
 		assert_same( array( 'new' ), $db->prepared[0][1], 'status parameter is new' );
 	} );
 } );
 
 db_test( 'Home card is unseen on read failure without leaking errors or numbers', function () {
 	db_home_with_fixture( function ( $db ) {
-		foreach ( array( 'fail_count', 'fail_list' ) as $failure ) {
+		foreach ( array( 'fail_count', 'null_count' ) as $failure ) {
 			$db->reads = array();
-			$db->$failure = true;
+			if ( 'fail_count' === $failure ) { $db->fail_count = true; } else { $db->total = null; }
 			$card = DoughBoss_Home::card_new_enquiries();
 			assert_same( 'unseen', $card['state'], $failure . ' is unseen' );
 			assert_false( array_key_exists( 'count', $card ), $failure . ' has no count key' );
@@ -126,7 +165,8 @@ db_test( 'Home card is unseen on read failure without leaking errors or numbers'
 			// Visible text of this card only: tag names such as h2 carry digits of their own, and the
 			// production card beside it may genuinely be live with a count and read time.
 			assert_false( (bool) preg_match( '/[0-9]/', wp_strip_all_tags_for_home_test( $enquiries ) ), $failure . ' render shows no digit count' );
-			$db->$failure = false;
+			$db->fail_count = false;
+			$db->total      = 0;
 		}
 	} );
 } );
