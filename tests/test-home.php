@@ -9,8 +9,14 @@ if ( ! function_exists( 'current_user_can' ) ) {
 }
 
 if ( ! function_exists( 'wp_date' ) ) {
-	/** The same deterministic stand-in the notifications suite uses: UTC, so the shown time is predictable. */
+	/**
+	 * The same deterministic stand-in the notifications suite uses: UTC, so the shown time is predictable.
+	 * A test may switch on $GLOBALS['db_wp_date_record'] to see the calls; off (the default) it only formats.
+	 */
 	function wp_date( $format, $timestamp = null ) {
+		if ( ! empty( $GLOBALS['db_wp_date_record'] ) ) {
+			$GLOBALS['db_wp_date_calls'][] = array( $format, $timestamp );
+		}
 		return gmdate( $format, (int) $timestamp );
 	}
 }
@@ -377,10 +383,24 @@ db_test( 'A single shop count is filtered to that shop, through both production 
 } );
 
 db_test( 'The read time is formatted in the site timezone (wp_date), never in UTC (gmdate)', function () {
-	// The test wp_date stand-in is UTC, so the rendered text alone cannot tell the two apart: pin the call.
-	$source = file_get_contents( dirname( __DIR__ ) . '/includes/class-doughboss-home.php' );
-	$start  = strpos( $source, 'private static function render_card(' );
-	$body   = substr( $source, $start );
-	assert_true( false !== strpos( $body, "wp_date( 'D j M, g:i a', \$read_ts )" ), 'render_card shows the time through wp_date' );
-	assert_false( false !== strpos( $body, 'gmdate(' ), 'and never formats it in UTC' );
+	db_home_with_fixture( function ( $db ) {
+		$db->total                    = 1;
+		$GLOBALS['db_wp_date_record'] = true;
+		$GLOBALS['db_wp_date_calls']  = array();
+		try {
+			ob_start();
+			DoughBoss_Home::render();
+			$html = ob_get_clean();
+			$calls = $GLOBALS['db_wp_date_calls'];
+		} finally {
+			unset( $GLOBALS['db_wp_date_record'], $GLOBALS['db_wp_date_calls'] );
+		}
+		// One site-timezone format per live card, for the time the card was read.
+		assert_same( 2, count( $calls ), 'each live card asks wp_date for its read time' );
+		foreach ( $calls as $call ) {
+			assert_same( 'D j M, g:i a', $call[0], 'the short site-local form' );
+			assert_true( is_int( $call[1] ) && abs( time() - $call[1] ) < 120, 'for the real read time' );
+			assert_true( false !== strpos( $html, '>' . gmdate( $call[0], $call[1] ) . '</time>' ), 'and that is what is shown' );
+		}
+	} );
 } );
