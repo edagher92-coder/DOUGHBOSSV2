@@ -246,12 +246,21 @@ class DoughBoss_Portals {
 		// Read-only selector; only the exact CRM value changes the manager view.
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$section = isset( $_GET['section'] ) && is_string( $_GET['section'] ) && 'crm' === $_GET['section'] ? 'crm' : 'overview';
+		// The Home section exists only while its switch is on; off, the exact value falls back to the overview.
+		$home_enabled = class_exists( 'DoughBoss_Home' ) && DoughBoss_Home::is_enabled();
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( $home_enabled && isset( $_GET['section'] ) && is_string( $_GET['section'] ) && 'home' === $_GET['section'] ) {
+			$section = 'home';
+		}
 		require_once DOUGHBOSS_PLUGIN_DIR . 'admin/class-doughboss-admin.php';
 		$this->render_head( __( 'Management — DoughBoss', 'doughboss' ), 'management' );
 		?>
 		<body class="doughboss-standalone-portal doughboss-management-portal">
 			<?php $this->render_portal_bar( 'management', '', '' ); ?>
 			<nav class="db-management-nav" aria-label="<?php esc_attr_e( 'Management sections', 'doughboss' ); ?>">
+				<?php if ( $home_enabled ) : ?>
+					<a<?php echo 'home' === $section ? ' class="is-active" aria-current="page"' : ''; ?> href="<?php echo esc_url( home_url( '/management/?section=home' ) ); ?>"><?php esc_html_e( 'Home', 'doughboss' ); ?></a>
+				<?php endif; ?>
 				<a<?php echo 'overview' === $section ? ' class="is-active" aria-current="page"' : ''; ?> href="<?php echo esc_url( home_url( '/management/' ) ); ?>"><?php esc_html_e( 'Overview', 'doughboss' ); ?></a>
 				<a<?php echo 'crm' === $section ? ' class="is-active" aria-current="page"' : ''; ?> href="<?php echo esc_url( home_url( '/management/?section=crm' ) ); ?>"><?php esc_html_e( 'Catering CRM', 'doughboss' ); ?></a>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss' ) ); ?>"><?php esc_html_e( 'Orders', 'doughboss' ); ?></a>
@@ -262,7 +271,9 @@ class DoughBoss_Portals {
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=doughboss-settings' ) ); ?>"><?php esc_html_e( 'Settings', 'doughboss' ); ?></a>
 			</nav>
 			<main class="db-management-main" id="main">
-				<?php if ( 'crm' === $section ) {
+				<?php if ( 'home' === $section ) {
+					DoughBoss_Home::render();
+				} elseif ( 'crm' === $section ) {
 					// GET-only filters; the CRM service validates before querying.
 					// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 					DoughBoss_CRM::render( $_GET );
